@@ -19,9 +19,9 @@ CREATE TABLE IF NOT EXISTS "public"."epoch_rewards"(
 --
 -- Row Level Security Policies
 --
-ALTER TABLE "public"."users" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."epoch_rewards" ENABLE ROW LEVEL SECURITY;
 
 -- Policy: Enable read access for all users
-CREATE POLICY "Enable read access for all users" ON "public"."users"
+CREATE POLICY "Enable read access for all users" ON "public"."epoch_rewards"
     FOR SELECT
         USING (TRUE);
