@@ -1,7 +1,3 @@
-
-
-CREATE TYPE "public"."merkle_root_upload_authority" AS ENUM('Empty', 'Other', 'OldJitoLabs', 'TipRouter');
-
 --
 -- Validator History Entry Table
 --
@@ -12,22 +8,22 @@ CREATE TABLE IF NOT EXISTS "public"."validator_history_entries"(
     "vote_pubkey" "public"."solana_pubkey" NOT NULL,
     "activated_stake_lamports" "public"."u_64" NOT NULL,
     "epoch" INTEGER NOT NULL,
-    "mev_commission"  SMALLINT NOT NULL,
-    "epoch_credits" INTEGER NOT NULL,
-    "commission" SMALLINT NOT NULL,
+    "mev_commission"  INTEGER NOT NULL,
+    "epoch_credits" BIGINT NOT NULL,
+    "commission" INTEGER NOT NULL,
     "client_type" SMALLINT NOT NULL,
     "version" JSONB NOT NULL,
     "ip" VARCHAR(256),
-    "merkle_root_upload_authority" "public"."merkle_root_upload_authority",
+    "merkle_root_upload_authority" SMALLINT DEFAULT 0 NOT NULL,
     "is_superminority" SMALLINT NOT NULL,
-    "rank" INTEGER NOT NULL,
+    "rank" BIGINT NOT NULL,
     "vote_account_last_update_slot" "public"."u_64" NOT NULL,
-    "mev_earned" INTEGER NOT NULL,
-    "priority_fee_commission" SMALLINT,
+    "mev_earned" BIGINT NOT NULL,
+    "priority_fee_commission" INTEGER,
     "priority_fee_tips" "public"."u_64",
     "total_priority_fees" "public"."u_64",
-    "total_leader_slots" INTEGER,
-    "blocks_produced" INTEGER,
+    "total_leader_slots" BIGINT,
+    "blocks_produced" BIGINT,
     "block_data_updated_at_slot" "public"."u_64"
 );
 

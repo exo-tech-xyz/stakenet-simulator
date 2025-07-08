@@ -1,10 +1,17 @@
-use sqlx::{Error, FromRow, Pool, Postgres, QueryBuilder, types::BigDecimal};
-use validator_history::ValidatorHistoryEntry as JitoValidatorHistoryEntry;
+use serde::Serialize;
+use sqlx::{Error, Pool, Postgres, QueryBuilder, types::{BigDecimal, Json}};
+use validator_history::{ClientVersion as JitoClientVersion, ValidatorHistoryEntry as JitoValidatorHistoryEntry};
 
 pub struct ValidatorHistoryEntry {
     pub id: String,
     pub vote_pubkey: String,
     pub validator_history_entry: JitoValidatorHistoryEntry,
+}
+
+impl ValidatorHistoryEntry {
+    pub fn new(vote_pubkey: String, validator_history_entry: JitoValidatorHistoryEntry) -> Self {
+        Self { id: format!("{}-{}", validator_history_entry.epoch, vote_pubkey), vote_pubkey, validator_history_entry }
+    }
 }
 
 impl ValidatorHistoryEntry {
@@ -39,17 +46,13 @@ impl ValidatorHistoryEntry {
             ));
             separated.push_bind(i32::from(record.validator_history_entry.epoch));
             separated
-                .push_bind(i16::try_from(record.validator_history_entry.mev_commission).unwrap());
+                .push_bind(i32::try_from(record.validator_history_entry.mev_commission).unwrap());
             separated
-                .push_bind(i32::try_from(record.validator_history_entry.epoch_credits).unwrap());
-            separated.push_bind(i16::from(record.validator_history_entry.commission));
+                .push_bind(i64::try_from(record.validator_history_entry.epoch_credits).unwrap());
+            separated.push_bind(i32::from(record.validator_history_entry.commission));
             separated.push_bind(i16::from(record.validator_history_entry.client_type));
-            separated.push_bind(format!(
-                "{{ \"major\":{},\"minor\":{},\"patch\":{} }}",
-                record.validator_history_entry.version.major,
-                record.validator_history_entry.version.minor,
-                record.validator_history_entry.version.patch
-            ));
+            let version: ClientVersion = record.validator_history_entry.version.into();
+            separated.push_bind(Json(version));
             separated.push_bind(
                 record
                     .validator_history_entry
@@ -60,16 +63,16 @@ impl ValidatorHistoryEntry {
                     .join("."),
             );
 
-            separated.push_bind(record.validator_history_entry.merkle_root_upload_authority);
+            separated.push_bind(i16::from(record.validator_history_entry.merkle_root_upload_authority as u8));
             separated.push_bind(i16::from(record.validator_history_entry.is_superminority));
-            separated.push_bind(i32::try_from(record.validator_history_entry.rank).unwrap());
+            separated.push_bind(i64::try_from(record.validator_history_entry.rank).unwrap());
             separated.push_bind(BigDecimal::from(record.validator_history_entry.vote_account_last_update_slot));
             separated.push_bind(BigDecimal::from(record.validator_history_entry.mev_earned));
-            separated.push_bind(i16::from(record.validator_history_entry.priority_fee_commission));
+            separated.push_bind(i32::try_from(record.validator_history_entry.priority_fee_commission).unwrap());
             separated.push_bind(BigDecimal::from(record.validator_history_entry.priority_fee_tips));
             separated.push_bind(BigDecimal::from(record.validator_history_entry.total_priority_fees));
-            separated.push_bind(i32::from(record.validator_history_entry.total_leader_slots));
-            separated.push_bind(i32::from(record.validator_history_entry.blocks_produced));
+            separated.push_bind(i64::try_from(record.validator_history_entry.total_leader_slots).unwrap());
+            separated.push_bind(i64::try_from(record.validator_history_entry.blocks_produced).unwrap());
             separated.push_bind(BigDecimal::from(record.validator_history_entry.block_data_updated_at_slot));
 
 
@@ -85,9 +88,23 @@ impl ValidatorHistoryEntry {
         }
 
         if num_records > 0 {
+            query_builder.push(" ON CONFLICT (id) DO NOTHING");
             let query = query_builder.build();
             query.execute(db_connection).await?;
         }
         Ok(())
+    }
+}
+
+
+#[derive(Serialize)]
+pub struct ClientVersion {
+    pub major: u8,
+    pub minor: u8,
+    pub patch: u16,
+}
+impl From<JitoClientVersion> for ClientVersion {
+    fn from(value: JitoClientVersion) -> Self {
+        Self { major: value.major, minor: value.minor, patch: value.patch }
     }
 }

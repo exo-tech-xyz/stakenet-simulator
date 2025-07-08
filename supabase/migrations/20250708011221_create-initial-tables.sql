@@ -6,9 +6,6 @@ CREATE DOMAIN "public"."u_64" AS numeric(20, 0);
 
 ALTER DOMAIN "public"."u_64" OWNER TO "postgres";
 
-
-create type "public"."merkle_root_upload_authority" as enum ('Empty', 'Other', 'OldJitoLabs', 'TipRouter');
-
 create table "public"."epoch_rewards" (
     "id" character varying(70) not null,
     "vote_pubkey" solana_pubkey not null,
@@ -29,23 +26,23 @@ create table "public"."validator_history_entries" (
     "id" character varying(70) not null,
     "vote_pubkey" solana_pubkey not null,
     "activated_stake_lamports" u_64 not null,
-    "epoch" smallint not null,
-    "mev_commission" smallint not null,
-    "epoch_credits" smallint not null,
-    "commission" smallint not null,
+    "epoch" integer not null,
+    "mev_commission" integer not null,
+    "epoch_credits" bigint not null,
+    "commission" integer not null,
     "client_type" smallint not null,
     "version" jsonb not null,
     "ip" character varying(256),
-    "merkle_root_upload_authority" merkle_root_upload_authority,
+    "merkle_root_upload_authority" smallint not null default 0,
     "is_superminority" smallint not null,
-    "rank" integer not null,
+    "rank" bigint not null,
     "vote_account_last_update_slot" u_64 not null,
-    "mev_earned" integer not null,
-    "priority_fee_commission" smallint,
+    "mev_earned" bigint not null,
+    "priority_fee_commission" integer,
     "priority_fee_tips" u_64,
     "total_priority_fees" u_64,
-    "total_leader_slots" integer,
-    "blocks_produced" integer,
+    "total_leader_slots" bigint,
+    "blocks_produced" bigint,
     "block_data_updated_at_slot" u_64
 );
 
