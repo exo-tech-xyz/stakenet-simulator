@@ -13,6 +13,8 @@ use crate::{
 };
 
 mod config;
+mod inflation;
+mod rpc_utils;
 mod validator_history;
 
 #[derive(Debug, Error)]
