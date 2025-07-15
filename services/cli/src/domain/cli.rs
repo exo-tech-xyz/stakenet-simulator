@@ -9,7 +9,19 @@ struct Args {
 
 #[derive(Subcommand, Debug, Clone)]
 enum Commands {
-    Backtest { target_epoch: String },
+    Backtest {
+        mev_commission_score: String,
+        commission_score: String,
+        historical_commission_score: String,
+        blacklisted_score: String,
+        superminority_score: String,
+        delinquency_score: String,
+        running_jito_score: String,
+        yield_score: String,
+        merkle_root_upload_authority_score: String,
+        priority_fee_commission_score: String,
+        target_epoch: String,
+    },
 }
 pub struct CLI {}
 
@@ -29,7 +41,19 @@ impl CLI {
             args.extend(shlex::split(line).ok_or("error: Invalid quoting").unwrap());
             match Args::try_parse_from(args) {
                 Ok(cli) => match cli.cmd {
-                    Commands::Backtest { target_epoch } => self.backtest(target_epoch),
+                    Commands::Backtest {
+                        mev_commission_score,
+                        commission_score,
+                        historical_commission_score,
+                        blacklisted_score,
+                        superminority_score,
+                        delinquency_score,
+                        running_jito_score,
+                        yield_score,
+                        merkle_root_upload_authority_score,
+                        priority_fee_commission_score,
+                        target_epoch,
+                    } => self.backtest(target_epoch),
                 },
                 Err(e) => println!("That's not a valid command! Error: {}", e),
             };
