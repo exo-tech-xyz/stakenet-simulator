@@ -29,7 +29,8 @@ impl CLI {
     pub fn new() -> Self {
         CLI {}
     }
-    pub fn run(&mut self) {
+    #[tokio::main]
+    pub async fn run(&mut self) {
         loop {
             self.show_commands();
             let mut buf = String::new();

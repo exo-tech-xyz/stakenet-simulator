@@ -1,6 +1,7 @@
 use stakenet_cli::domain::CLI;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let mut cli = CLI::new();
     cli.run();
 }
