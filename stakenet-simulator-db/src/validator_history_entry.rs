@@ -27,7 +27,7 @@ impl FromRow<'_, PgRow> for ValidatorHistoryEntry {
         let commission: i32 = row.try_get("commission")?;
         let client_type: i16 = row.try_get("client_type")?;
         let version: ClientVersion =
-            serde_json::from_str(row.try_get("version")?).map_err(|_| {
+            serde_json::from_value(row.try_get("version")?).map_err(|_| {
                 Error::Decode(Box::new(StakenetSimulatorDbError::DecodeError(
                     String::from("version"),
                 )))
@@ -50,7 +50,7 @@ impl FromRow<'_, PgRow> for ValidatorHistoryEntry {
             row.try_get("priority_fee_merkle_root_upload_authority")?;
 
         let ip_converted: [u8; 4] = ip
-            .split(",")
+            .split(".")
             .map(|x| u8::from_str_radix(x, 10).unwrap())
             .collect::<Vec<u8>>()
             .try_into()
@@ -72,21 +72,38 @@ impl FromRow<'_, PgRow> for ValidatorHistoryEntry {
                     patch: version.patch,
                 },
                 ip: ip_converted,
-                merkle_root_upload_authority: validator_history::MerkleRootUploadAuthority::from(merkle_root_upload_authority as u8),
-                is_superminority: decode_db!(mev_commission, "mev_commission"),
-                rank: decode_db!(mev_commission, "mev_commission"),
+                merkle_root_upload_authority: int_to_upload_authority(merkle_root_upload_authority),
+                is_superminority: decode_db!(is_superminority, "is_superminority"),
+                rank: decode_db!(rank, "rank"),
                 vote_account_last_update_slot: vote_account_last_update_slot.into(),
                 mev_earned: decode_db!(mev_earned, "mev_earned"),
-                priority_fee_commission: decode_db!(priority_fee_commission, "priority_fee_commission"),
+                priority_fee_commission: decode_db!(
+                    priority_fee_commission,
+                    "priority_fee_commission"
+                ),
                 priority_fee_tips: priority_fee_tips.into(),
                 total_priority_fees: total_priority_fees.into(),
                 total_leader_slots: decode_db!(total_leader_slots, "total_leader_slots"),
-                blocks_produced:  decode_db!(blocks_produced, "blocks_produced"),
+                blocks_produced: decode_db!(blocks_produced, "blocks_produced"),
                 block_data_updated_at_slot: block_data_updated_at_slot.into(),
-                priority_fee_merkle_root_upload_authority: validator_history::MerkleRootUploadAuthority::from(priority_fee_merkle_root_upload_authority as u8),
+                priority_fee_merkle_root_upload_authority: int_to_upload_authority(
+                    priority_fee_merkle_root_upload_authority,
+                ),
                 ..JitoValidatorHistoryEntry::default()
             },
         })
+    }
+}
+
+fn int_to_upload_authority(int: i16) -> validator_history::MerkleRootUploadAuthority {
+    match int {
+        0 | 255 => validator_history::MerkleRootUploadAuthority::Unset,
+        1 => validator_history::MerkleRootUploadAuthority::Other,
+        2 => validator_history::MerkleRootUploadAuthority::OldJitoLabs,
+        3 => validator_history::MerkleRootUploadAuthority::TipRouter,
+        _ => {
+            panic!("unknown")
+        }
     }
 }
 

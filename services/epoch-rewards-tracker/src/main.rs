@@ -1,6 +1,6 @@
 use std::{str::FromStr, sync::Arc};
 
-use solana_client::client_error::ClientError;
+use solana_client::{client_error::ClientError, nonblocking::rpc_client::RpcClient};
 use solana_sdk::pubkey::Pubkey;
 use sqlx::{Error as SqlxError, postgres::PgPoolOptions};
 use thiserror::Error;
@@ -8,8 +8,7 @@ use tracing::{Level, error};
 use tracing_subscriber::EnvFilter;
 
 use crate::{
-    config::{Config, ConfigError},
-    validator_history::load_and_record_validator_history,
+    config::{Config, ConfigError}, inflation::get_inflation_rewards, validator_history::load_and_record_validator_history
 };
 
 mod config;
@@ -59,8 +58,10 @@ async fn main() -> Result<(), EpochRewardsTrackerError> {
             .unwrap(),
     );
     let program_id = Pubkey::from_str(&config.validator_history_program_id).unwrap();
+    let rpc_client = RpcClient::new(config.rpc_url.clone());
 
-    load_and_record_validator_history(&db_conn_pool, config.rpc_url, program_id).await?;
+    // load_and_record_validator_history(&db_conn_pool, config.rpc_url, program_id).await?;
+    get_inflation_rewards(&db_conn_pool, &rpc_client).await?;
 
     Ok(())
 }
