@@ -1,4 +1,1 @@
-fn main() {
-    let mut cli = CLI::new();
-    cli.run();
-}
+pub mod domain;
