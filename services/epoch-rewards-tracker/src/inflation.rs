@@ -8,6 +8,8 @@ use tracing::info;
 
 use crate::EpochRewardsTrackerError;
 
+// TODO: Gather all th
+
 pub async fn get_inflation_rewards(
     db_connection: &Pool<Postgres>,
     rpc_client: &RpcClient,
@@ -33,7 +35,6 @@ pub async fn get_inflation_rewards(
             account_rewards.commission,
             account_rewards.amount,
         );
-
     }
 
     Ok(())

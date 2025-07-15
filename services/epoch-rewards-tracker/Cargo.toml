@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 anchor-lang = { workspace = true }
+borsh = "1.5.7"
 dotenvy = { workspace = true }
 envy = "0.4.2"
 serde = { workspace = true }

@@ -1304,6 +1304,7 @@ name = "epoch-rewards-tracker"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",
+ "borsh 1.5.7",
  "dotenvy",
  "envy",
  "serde",
@@ -5884,6 +5885,7 @@ dependencies = [
  "num-traits",
  "serde",
  "serde_json",
+ "solana-sdk",
  "sqlx",
  "thiserror 2.0.12",
  "tracing",
