@@ -9,7 +9,7 @@ struct Args {
 
 #[derive(Subcommand, Debug, Clone)]
 enum Commands {
-    Backtest { node_id: String },
+    Backtest { target_epoch: String },
 }
 pub struct CLI {}
 
@@ -29,7 +29,7 @@ impl CLI {
             args.extend(shlex::split(line).ok_or("error: Invalid quoting").unwrap());
             match Args::try_parse_from(args) {
                 Ok(cli) => match cli.cmd {
-                    Commands::Backtest { node_id } => self.backtest(node_id),
+                    Commands::Backtest { target_epoch } => self.backtest(target_epoch),
                 },
                 Err(e) => println!("That's not a valid command! Error: {}", e),
             };
