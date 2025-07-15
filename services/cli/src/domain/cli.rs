@@ -17,7 +17,7 @@ impl CLI {
     pub fn new() -> Self {
         CLI {}
     }
-    pub async fn run(&mut self) {
+    pub fn run(&mut self) {
         loop {
             self.show_commands();
             let mut buf = String::new();
@@ -31,7 +31,7 @@ impl CLI {
                 Ok(cli) => match cli.cmd {
                     Commands::Backtest { node_id } => self.backtest(node_id),
                 },
-                Err(e) => error!("That's not a valid command! Error: {}", e),
+                Err(e) => println!("That's not a valid command! Error: {}", e),
             };
         }
     }
