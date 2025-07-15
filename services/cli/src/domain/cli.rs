@@ -39,10 +39,16 @@ impl CLI {
     fn show_commands(&mut self) {
         println!(
             r#"COMMANDS:
-    1) backtest <target_epoch> - creates a wallet and saves it into the wallets file. Returns the address.
+    1) backtest <target_epoch> - It takes in parameter overrides (current parameters could be the defaults) and the target epoch (that the scoring/evaluation criteria is ran from). It should then use the data in the PostgreSQL DB to run the Steward’s scoring criteria ranking all validators and determine which validators made it into the X (also a simulation parameter) number delegated to by jitoSOL. Then use that list to determine the APY for SOL staked across those validators over a given epoch period. In this calculation assume the SOL is 100% activated across all epochs. 
     "#
         );
     }
 
-    fn backtest(&mut self, target_epoch: String) {}
+    fn backtest(&mut self, target_epoch: String) {
+        println!("Fetching data from DB");
+        println!("Running Steward’s scoring criteria");
+        println!(
+            "determine the APY for SOL staked across those validators over a given epoch period"
+        );
+    }
 }
