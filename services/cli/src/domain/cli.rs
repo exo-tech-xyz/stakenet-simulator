@@ -1,4 +1,8 @@
 use clap::{Parser, Subcommand, command};
+use sqlx::{Error as SqlxError, postgres::PgPoolOptions};
+use std::{str::FromStr, sync::Arc};
+use tracing::{Level, error};
+use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -31,6 +35,30 @@ impl CLI {
     }
     #[tokio::main]
     pub async fn run(&mut self) {
+        let level = std::env::var("RUST_LOG").unwrap_or(Level::INFO.to_string());
+        tracing_subscriber::fmt()
+            .json()
+            .with_env_filter(EnvFilter::new(level))
+            // this needs to be set to remove duplicated information in the log.
+            .with_current_span(false)
+            // this needs to be set to false, otherwise ANSI color codes will
+            // show up in a confusing manner in CloudWatch logs.
+            .with_ansi(false)
+            // disabling time is handy because CloudWatch will add the ingestion time.
+            .without_time()
+            // remove the name of the function from every log entry
+            .with_target(false)
+            .init();
+
+        let config = Config::from_env()?;
+
+        let db_conn_pool = Arc::new(
+            PgPoolOptions::new()
+                .max_connections(5)
+                .connect(&config.db_connection_url)
+                .await
+                .unwrap(),
+        );
         loop {
             self.show_commands();
             let mut buf = String::new();
