@@ -1,14 +1,35 @@
 // TODO: For each validator load a stake account that has a long history
 
+use std::str::FromStr;
+
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey;
+use solana_sdk::pubkey::Pubkey;
 use sqlx::{Pool, Postgres};
-use stakenet_simulator_db::validator_history_entry::ValidatorHistoryEntry;
+use stakenet_simulator_db::{stake_accounts::StakeAccount, validator_history_entry::ValidatorHistoryEntry};
 use tracing::info;
 
-use crate::EpochRewardsTrackerError;
+use crate::{rpc_utils, EpochRewardsTrackerError};
 
-// TODO: Gather all th
+pub async fn gather_inflation_rewards(
+    db_connection: &Pool<Postgres>,
+    rpc_client: &RpcClient,
+) -> Result<(), EpochRewardsTrackerError> {
+    // Fetch all the stake_accounts from the DB
+    let stake_account_keys = StakeAccount::get_all_pubkeys(db_connection).await?;
+    let stake_account_keys: Vec<Pubkey> = stake_account_keys.into_iter().map(|x| Pubkey::from_str(&x).unwrap()).collect();
+    // Break them into chunks of 30 (335 batches)
+    for stake_accounts in stake_account_keys.chunks(30).into_iter() {
+        // For each batch, call getInflationRewards for epochs >= 700 (120 calls)
+        for epoch in 700u64..818 {
+            // TODO: Make sure accounts that were not activated by this epoch are properly handled
+            let rewards = rpc_utils::get_inflation_rewards(rpc_client, stake_accounts, epoch).await?;
+        }
+        // TODO: Insert the data into the DB
+    }
+
+    Ok(())
+}
 
 pub async fn get_inflation_rewards(
     db_connection: &Pool<Postgres>,
