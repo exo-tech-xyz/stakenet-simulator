@@ -1,14 +1,17 @@
 use std::{str::FromStr, sync::Arc};
 
 use solana_client::{client_error::ClientError, nonblocking::rpc_client::RpcClient};
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::pubkey::{ParsePubkeyError, Pubkey};
 use sqlx::{Error as SqlxError, postgres::PgPoolOptions};
 use thiserror::Error;
 use tracing::{Level, error};
 use tracing_subscriber::EnvFilter;
 
 use crate::{
-    config::{Config, ConfigError}, inflation::get_inflation_rewards, stake_accounts::gather_stake_accounts, validator_history::load_and_record_validator_history
+    config::{Config, ConfigError},
+    inflation::get_inflation_rewards,
+    stake_accounts::gather_stake_accounts,
+    validator_history::load_and_record_validator_history,
 };
 
 mod config;
@@ -30,6 +33,9 @@ pub enum EpochRewardsTrackerError {
 
     #[error("SqlxError: {0}")]
     SqlxError(#[from] SqlxError),
+
+    #[error("ParsePubkeyError: {0}")]
+    ParsePubkeyError(#[from] ParsePubkeyError)
 }
 
 #[tokio::main]

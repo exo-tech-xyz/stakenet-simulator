@@ -228,6 +228,21 @@ impl ValidatorHistoryEntry {
         .fetch_optional(db_connection)
         .await
     }
+
+    pub async fn get_all_vote_pubkeys(db_connection: &Pool<Postgres>,) -> Result<Vec<String>, Error> {
+        let pubkeys = sqlx::query_as::<_, VotePubkey>(&format!(
+            "SELECT DISTINCT ON(vote_pubkey) vote_pubkey FROM validator_history_entries GROUP BY vote_pubkey",
+        ))
+        .fetch_all(db_connection)
+        .await?;
+
+        Ok(pubkeys.into_iter().map(|row| row.vote_pubkey).collect())
+    }
+}
+
+#[derive(FromRow)]
+struct VotePubkey {
+    vote_pubkey: String,
 }
 
 #[derive(Deserialize, Serialize)]

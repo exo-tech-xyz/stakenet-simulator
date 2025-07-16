@@ -38,7 +38,11 @@ pub async fn fetch_stake_accounts_for_validator(
         &u64::MAX.to_le_bytes(),
     ));
     let config = RpcProgramAccountsConfig {
-        filters: Some(vec![discriminator_filter, vote_pubkey_filter, blank_decativation_epoch]),
+        filters: Some(vec![
+            discriminator_filter,
+            vote_pubkey_filter,
+            blank_decativation_epoch,
+        ]),
         account_config: RpcAccountInfoConfig {
             encoding: Some(UiAccountEncoding::Base64Zstd),
             data_slice: None,
