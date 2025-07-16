@@ -19,10 +19,21 @@ pub async fn gather_stake_accounts(
     for vote_key in vote_keys {
         let vote_pubkey = Pubkey::from_str(&vote_key)?;
         let res = fetch_stake_accounts_for_validator(rpc_client, &vote_pubkey).await?;
-        info!("Fetched {} stake accounts for vote account {}", res.len(), vote_key);
-        // Find [at most] 10 with the longest history
-        let mut res: Vec<(Pubkey, StakeStateV2)> =
-            res.into_iter().filter(|x| x.1.stake().is_some()).collect();
+        info!(
+            "Fetched {} stake accounts for vote account {}",
+            res.len(),
+            vote_key
+        );
+        // Find [at most] 10 with the longest history. First filter to make sure Stake structure
+        //  exists on the account and at least 0.1 SOL is delegated
+        let mut res: Vec<(Pubkey, StakeStateV2)> = res
+            .into_iter()
+            .filter(|x| {
+                x.1.stake().is_some()
+                    && x.1.delegation().is_some()
+                    && x.1.delegation().unwrap().stake > 100_000_000
+            })
+            .collect();
         res.sort_by(|a, b: &(Pubkey, StakeStateV2)| {
             a.1.stake()
                 .unwrap()

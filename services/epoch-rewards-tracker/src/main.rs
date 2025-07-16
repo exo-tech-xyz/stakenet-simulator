@@ -35,7 +35,7 @@ pub enum EpochRewardsTrackerError {
     SqlxError(#[from] SqlxError),
 
     #[error("ParsePubkeyError: {0}")]
-    ParsePubkeyError(#[from] ParsePubkeyError)
+    ParsePubkeyError(#[from] ParsePubkeyError),
 }
 
 #[tokio::main]
