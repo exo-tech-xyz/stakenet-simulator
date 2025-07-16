@@ -13,3 +13,5 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["json"] }
 sqlx = { workspace = true, features = ["postgres", "runtime-tokio-native-tls", "chrono", "bigdecimal" ] }
+dotenvy = { workspace = true }
+envy = "0.4.2"

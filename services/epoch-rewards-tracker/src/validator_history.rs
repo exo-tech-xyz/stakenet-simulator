@@ -91,3 +91,5 @@ pub async fn load_all_validator_history_pubkeys(
 
     Ok(accounts.into_iter().map(|(pubkey, _)| pubkey).collect())
 }
+
+pub async fn fetch_reward_info() {}
