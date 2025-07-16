@@ -6,26 +6,45 @@ use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey;
 use solana_sdk::pubkey::Pubkey;
 use sqlx::{Pool, Postgres};
-use stakenet_simulator_db::{stake_accounts::StakeAccount, validator_history_entry::ValidatorHistoryEntry};
+use stakenet_simulator_db::{
+    inflation_rewards::InflationReward, stake_accounts::StakeAccount,
+    validator_history_entry::ValidatorHistoryEntry,
+};
 use tracing::info;
 
-use crate::{rpc_utils, EpochRewardsTrackerError};
+use crate::{EpochRewardsTrackerError, rpc_utils};
 
+// TODO (nice to have): Parllelize these batches and calls
 pub async fn gather_inflation_rewards(
     db_connection: &Pool<Postgres>,
     rpc_client: &RpcClient,
 ) -> Result<(), EpochRewardsTrackerError> {
     // Fetch all the stake_accounts from the DB
     let stake_account_keys = StakeAccount::get_all_pubkeys(db_connection).await?;
-    let stake_account_keys: Vec<Pubkey> = stake_account_keys.into_iter().map(|x| Pubkey::from_str(&x).unwrap()).collect();
+    let stake_account_keys: Vec<Pubkey> = stake_account_keys
+        .into_iter()
+        .map(|x| Pubkey::from_str(&x).unwrap())
+        .collect();
     // Break them into chunks of 30 (335 batches)
     for stake_accounts in stake_account_keys.chunks(30).into_iter() {
         // For each batch, call getInflationRewards for epochs >= 700 (120 calls)
+        info!("Fetching inflation rewards for stake accounts {:?}", stake_accounts);
         for epoch in 700u64..818 {
-            // TODO: Make sure accounts that were not activated by this epoch are properly handled
-            let rewards = rpc_utils::get_inflation_rewards(rpc_client, stake_accounts, epoch).await?;
+            let rewards =
+                rpc_utils::get_inflation_rewards(rpc_client, stake_accounts, epoch).await?;
+            // Build a set of records and insert into the DB
+            let records: Vec<InflationReward> = rewards
+                .into_iter()
+                .zip(stake_accounts)
+                .filter_map(|(maybe_inflation_reward, stake_account)| {
+                    Some(InflationReward::from_rpc_inflation_reward(
+                        maybe_inflation_reward?,
+                        stake_account,
+                    ))
+                })
+                .collect();
+            InflationReward::bulk_insert(db_connection, records).await?;
         }
-        // TODO: Insert the data into the DB
     }
 
     Ok(())

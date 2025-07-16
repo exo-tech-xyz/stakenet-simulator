@@ -5885,6 +5885,7 @@ dependencies = [
  "num-traits",
  "serde",
  "serde_json",
+ "solana-client",
  "solana-sdk",
  "sqlx",
  "thiserror 2.0.12",

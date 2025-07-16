@@ -1,5 +1,5 @@
 use solana_sdk::{pubkey::Pubkey, stake::state::StakeStateV2};
-use sqlx::{types::BigDecimal, Error as SqlxError, FromRow, Pool, Postgres, QueryBuilder};
+use sqlx::{Error as SqlxError, FromRow, Pool, Postgres, QueryBuilder, types::BigDecimal};
 
 #[derive(Default)]
 pub struct StakeAccount {
@@ -123,7 +123,7 @@ impl StakeAccount {
         Ok(())
     }
 
-    pub async fn get_all_pubkeys(db_connection: &Pool<Postgres>,) -> Result<Vec<String>, SqlxError> {
+    pub async fn get_all_pubkeys(db_connection: &Pool<Postgres>) -> Result<Vec<String>, SqlxError> {
         let pubkeys = sqlx::query_as::<_, RecordPubkey>(&format!(
             "SELECT pubkey FROM stake_accounts ORDER BY pubkey",
         ))
@@ -133,7 +133,6 @@ impl StakeAccount {
         Ok(pubkeys.into_iter().map(|row| row.pubkey).collect())
     }
 }
-
 
 #[derive(FromRow)]
 struct RecordPubkey {
