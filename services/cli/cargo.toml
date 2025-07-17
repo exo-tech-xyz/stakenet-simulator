@@ -15,3 +15,4 @@ tracing-subscriber = { workspace = true, features = ["json"] }
 sqlx = { workspace = true, features = ["postgres", "runtime-tokio-native-tls", "chrono", "bigdecimal" ] }
 dotenvy = { workspace = true }
 envy = "0.4.2"
+stakenet-simulator-db = { workspace = true }

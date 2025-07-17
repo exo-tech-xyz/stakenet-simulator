@@ -10,6 +10,7 @@ use crate::domain::Config;
 
 pub mod commands;
 pub mod domain;
+pub mod utils;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about)]

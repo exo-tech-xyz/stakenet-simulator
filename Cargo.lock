@@ -5995,6 +5995,7 @@ dependencies = [
  "serde",
  "shlex",
  "sqlx",
+ "stakenet-simulator-db",
  "thiserror 2.0.12",
  "tokio",
  "tracing",
