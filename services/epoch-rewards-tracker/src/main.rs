@@ -9,7 +9,9 @@ use tracing_subscriber::EnvFilter;
 
 use crate::{
     config::{Config, ConfigError},
-    inflation::{gather_inflation_rewards, get_inflation_rewards},
+    inflation::{
+        gather_inflation_rewards, gather_total_inflation_rewards_per_epoch, get_inflation_rewards,
+    },
     stake_accounts::gather_stake_accounts,
     validator_history::load_and_record_validator_history,
 };
@@ -70,7 +72,8 @@ async fn main() -> Result<(), EpochRewardsTrackerError> {
     // load_and_record_validator_history(&db_conn_pool, config.rpc_url, program_id).await?;
     // get_inflation_rewards(&db_conn_pool, &rpc_client).await?;
     // gather_stake_accounts(&db_conn_pool, &rpc_client).await?;
-    gather_inflation_rewards(&db_conn_pool, &rpc_client).await?;
+    // gather_inflation_rewards(&db_conn_pool, &rpc_client).await?;
+    gather_total_inflation_rewards_per_epoch(&db_conn_pool).await?;
 
     Ok(())
 }

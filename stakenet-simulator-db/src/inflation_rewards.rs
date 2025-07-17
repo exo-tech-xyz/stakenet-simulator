@@ -1,15 +1,21 @@
+use crate::big_decimal_u64::BigDecimalU64;
 use solana_client::rpc_response::RpcInflationReward;
 use solana_sdk::pubkey::Pubkey;
-use sqlx::{Error as SqlxError, Pool, Postgres, QueryBuilder, types::BigDecimal};
+use sqlx::{prelude::FromRow, types::BigDecimal, Error as SqlxError, Pool, Postgres, QueryBuilder};
 
+#[derive(FromRow)]
 pub struct InflationReward {
     pub id: String,
     pub stake_account: String,
+    #[sqlx(try_from = "BigDecimalU64")]
     pub epoch: u64,
+    #[sqlx(try_from = "BigDecimalU64")]
     pub effective_slot: u64,
+    #[sqlx(try_from = "BigDecimalU64")]
     pub amount: u64,
+    #[sqlx(try_from = "BigDecimalU64")]
     pub post_balance: u64,
-    pub commission: Option<u8>,
+    pub commission: Option<i16>,
 }
 
 impl InflationReward {
@@ -30,7 +36,7 @@ impl InflationReward {
             effective_slot: rpc_inflation_reward.effective_slot,
             amount: rpc_inflation_reward.amount,
             post_balance: rpc_inflation_reward.post_balance,
-            commission: rpc_inflation_reward.commission,
+            commission: rpc_inflation_reward.commission.map(|x| i16::from(x)),
         }
     }
 
@@ -78,5 +84,17 @@ impl InflationReward {
             query.execute(db_connection).await?;
         }
         Ok(())
+    }
+
+    pub async fn fetch_by_validator(
+      db_connection: &Pool<Postgres>,
+      vote_pubkey: &str,
+    ) -> Result<Vec<Self>, SqlxError> {
+      sqlx::query_as::<_, Self>(&format!(
+        "SELECT inflation_rewards.* FROM inflation_rewards INNER JOIN stake_accounts ON stake_accounts.pubkey = inflation_rewards.stake_account WHERE stake_accounts.delegation_voter_pubkey = $1",
+    ))
+    .bind(vote_pubkey)
+    .fetch_all(db_connection)
+    .await
     }
 }

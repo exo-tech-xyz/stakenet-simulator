@@ -215,6 +215,18 @@ impl ValidatorHistoryEntry {
         Ok(())
     }
 
+    pub async fn fetch_by_validator(
+        db_connection: &Pool<Postgres>,
+        vote_pubkey: &str,
+    ) -> Result<Vec<Self>, Error> {
+        sqlx::query_as::<_, Self>(&format!(
+            "SELECT * FROM validator_history_entries WHERE vote_pubkey = $1",
+        ))
+        .bind(vote_pubkey)
+        .fetch_all(db_connection)
+        .await
+    }
+
     pub async fn fetch_by_validator_and_epoch(
         db_connection: &Pool<Postgres>,
         vote_pubkey: &str,
