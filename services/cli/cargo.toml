@@ -4,7 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+anchor-lang = { workspace = true }
 anyhow = "1.0.98"
+borsh = "0.10.0"
+bytemuck = { features = ["derive", "min_const_generics"], version = "1.13.1" }
 thiserror = { workspace = true }
 serde = { workspace = true }
 clap = { version = "4", features = ["derive", "env"] }
@@ -16,3 +19,5 @@ sqlx = { workspace = true, features = ["postgres", "runtime-tokio-native-tls", "
 dotenvy = { workspace = true }
 envy = "0.4.2"
 stakenet-simulator-db = { workspace = true }
+validator-history = { workspace = true }
+type-layout = "0.2"
