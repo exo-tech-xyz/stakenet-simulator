@@ -1,7 +1,7 @@
 use crate::big_decimal_u64::BigDecimalU64;
 use solana_client::rpc_response::RpcInflationReward;
 use solana_sdk::pubkey::Pubkey;
-use sqlx::{prelude::FromRow, types::BigDecimal, Error as SqlxError, Pool, Postgres, QueryBuilder};
+use sqlx::{Error as SqlxError, Pool, Postgres, QueryBuilder, prelude::FromRow, types::BigDecimal};
 
 #[derive(FromRow)]
 pub struct InflationReward {
@@ -87,10 +87,10 @@ impl InflationReward {
     }
 
     pub async fn fetch_by_validator(
-      db_connection: &Pool<Postgres>,
-      vote_pubkey: &str,
+        db_connection: &Pool<Postgres>,
+        vote_pubkey: &str,
     ) -> Result<Vec<Self>, SqlxError> {
-      sqlx::query_as::<_, Self>(&format!(
+        sqlx::query_as::<_, Self>(&format!(
         "SELECT inflation_rewards.* FROM inflation_rewards INNER JOIN stake_accounts ON stake_accounts.pubkey = inflation_rewards.stake_account WHERE stake_accounts.delegation_voter_pubkey = $1",
     ))
     .bind(vote_pubkey)

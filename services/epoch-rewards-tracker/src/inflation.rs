@@ -54,7 +54,8 @@ pub async fn gather_total_inflation_rewards_per_epoch(
                     for inflation_reward in inflation_rewards {
                         let stake_amount = inflation_reward.post_balance - inflation_reward.amount;
 
-                        stake_to_reward_ratios.push(inflation_reward.amount as f64 / stake_amount as f64);
+                        stake_to_reward_ratios
+                            .push(inflation_reward.amount as f64 / stake_amount as f64);
                         let commission = inflation_reward
                             .commission
                             .map(|x| u8::try_from(x).unwrap());
@@ -165,7 +166,7 @@ pub fn calculate_total_inflation_rewards(
 ) -> u64 {
     // First we get factor in the commission rate to get the calculated total inflation rewards
     //  attributed to this stake account. When commission is unknown or 0, then this is the inflation_rewards.
-    //  When there's a commission it's `inflation_reards * 100 / commission`` which  assumes 
+    //  When there's a commission it's `inflation_reards * 100 / commission`` which  assumes
     //  rewards are pro-rated evenly across active stake.
     let total_rewards_for_stake_account = if let Some(commission) = commission {
         if commission == 0 {
@@ -179,7 +180,7 @@ pub fn calculate_total_inflation_rewards(
     } else {
         inflation_rewards
     };
-    // Factor in the stake_accounts rewards amount for it's stake, relative to the 
+    // Factor in the stake_accounts rewards amount for it's stake, relative to the
     // total_active_stake on the validator
     u128::from(total_rewards_for_stake_account)
         .checked_mul(u128::from(total_active_stake))
