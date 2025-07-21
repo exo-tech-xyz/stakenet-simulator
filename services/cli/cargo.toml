@@ -20,4 +20,5 @@ dotenvy = { workspace = true }
 envy = "0.4.2"
 stakenet-simulator-db = { workspace = true }
 validator-history = { workspace = true }
+jito-steward = { workspace = true }
 type-layout = "0.2"

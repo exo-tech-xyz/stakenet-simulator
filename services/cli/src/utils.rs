@@ -1,10 +1,10 @@
 use crate::commands::BacktestArgs;
 use crate::domain::CliError::*;
 use anchor_lang::{
-    AnchorDeserialize, AnchorSerialize, Result, account, prelude::borsh::BorshSerialize,
-    solana_program::pubkey::Pubkey, zero_copy,
+    AnchorDeserialize, AnchorSerialize, Result,
+    solana_program::pubkey::Pubkey,
 };
-use type_layout::TypeLayout;
+use jito_steward::state::Config;
 
 pub const COMMISSION_MAX: u8 = 100;
 pub const EPOCH_DEFAULT: u16 = u16::MAX;
@@ -12,12 +12,6 @@ pub const BASIS_POINTS_MAX: u16 = 10_000;
 pub const TVC_MULTIPLIER: u32 = 16;
 pub const VALIDATOR_HISTORY_FIRST_RELIABLE_EPOCH: u64 = 0;
 
-const LARGE_BITMASK_INDEXES: usize = 20_000;
-
-#[allow(clippy::integer_division)]
-const LARGE_BITMASK: usize = (LARGE_BITMASK_INDEXES + 64 - 1) / 64;
-
-use borsh::BorshDeserialize;
 use validator_history::{ClusterHistory, MerkleRootUploadAuthority, ValidatorHistory};
 
 pub fn validator_score(
@@ -671,105 +665,4 @@ pub fn calculate_instant_unstake_merkle_root_upload_auth(
     } else {
         Ok(false)
     }
-}
-
-#[account(zero_copy)]
-#[derive(BorshSerialize, TypeLayout)]
-pub struct Config {
-    pub stake_pool: Pubkey,
-
-    pub validator_list: Pubkey,
-
-    pub admin: Pubkey,
-
-    pub parameters_authority: Pubkey,
-
-    pub blacklist_authority: Pubkey,
-
-    pub validator_history_blacklist: LargeBitMask,
-
-    pub parameters: Parameters,
-
-    pub paused: U8Bool,
-
-    pub _padding: [u8; 1023],
-}
-
-#[derive(BorshSerialize, Default)]
-#[zero_copy]
-pub struct Parameters {
-    /////// Scoring parameters ///////
-    /// Number of epochs to consider for MEV commission
-    pub mev_commission_range: u16,
-
-    /// Number of epochs to consider for epoch credits
-    pub epoch_credits_range: u16,
-
-    /// Number of epochs to consider for commission
-    pub commission_range: u16,
-
-    /// Highest MEV commission rate allowed in bps
-    pub mev_commission_bps_threshold: u16,
-
-    /// Proportion of delinquent slots to total slots to trigger delinquency measurement in scoring
-    pub scoring_delinquency_threshold_ratio: f64,
-
-    /// Proportion of delinquent slots to total slots to trigger instant unstake
-    pub instant_unstake_delinquency_threshold_ratio: f64,
-
-    /// Highest commission rate allowed in commission_range epochs, in percent
-    pub commission_threshold: u8,
-
-    /// Highest commission rate allowed in tracked history
-    pub historical_commission_threshold: u8,
-
-    /// Required so that the struct is 8-byte aligned
-    /// https://doc.rust-lang.org/reference/type-layout.html#reprc-structs
-    pub _padding_0: [u8; 6],
-
-    /////// Delegation parameters ///////
-    /// Number of validators to delegate to
-    pub num_delegation_validators: u32,
-
-    /// Maximum amount of the pool to be unstaked in a cycle for scoring (in basis points)
-    pub scoring_unstake_cap_bps: u32,
-
-    // Maximum amount of the pool to be unstaked in a cycle for instant unstake (in basis points)
-    pub instant_unstake_cap_bps: u32,
-
-    /// Maximum amount of the pool to be unstaked in a cycle from stake deposits (in basis points)
-    pub stake_deposit_unstake_cap_bps: u32,
-
-    /////// State machine operation parameters ///////
-    /// Number of slots that scoring must be completed in
-    pub compute_score_slot_range: u64,
-
-    /// Progress in epoch before instant unstake is allowed
-    pub instant_unstake_epoch_progress: f64,
-
-    /// Validator history copy_vote_account and Cluster History must be updated past this epoch progress before calculating instant unstake
-    pub instant_unstake_inputs_epoch_progress: f64,
-
-    /// Number of epochs a given validator set will be delegated to before recomputing scores
-    pub num_epochs_between_scoring: u64,
-
-    /// Minimum stake required to be added to pool ValidatorList and eligible for delegation
-    pub minimum_stake_lamports: u64,
-
-    /// Minimum epochs voting required to be in the pool ValidatorList and eligible for delegation
-    pub minimum_voting_epochs: u64,
-
-    pub _padding_1: [u64; 32],
-}
-
-#[derive(BorshSerialize, BorshDeserialize, Debug, PartialEq, Eq)]
-#[zero_copy]
-pub struct U8Bool {
-    pub value: u8,
-}
-
-#[derive(BorshSerialize, BorshDeserialize)]
-#[zero_copy]
-pub struct LargeBitMask {
-    pub values: [u64; LARGE_BITMASK],
 }

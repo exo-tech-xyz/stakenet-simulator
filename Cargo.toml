@@ -11,7 +11,6 @@ git = "https://github.com/solana-labs/curve25519-dalek.git"
 rev = "b500cdc2a920cd5bff9e2dd974d7b97349d61464"
 
 [workspace.dependencies]
-stakenet-simulator-db = { path = "stakenet-simulator-db" }
 anchor-lang = "0.31.1"
 dotenvy = "0.15.7"
 serde = { version = "1.0", features = ["derive"] }
@@ -19,8 +18,10 @@ solana-account-decoder-client-types = "=2.2.1"
 solana-client = "=2.2.1"
 solana-sdk = "=2.2.1"
 sqlx = { version = "0.8", features = ["postgres", "runtime-tokio-native-tls", "chrono", "bigdecimal" ] }
+stakenet-simulator-db = { path = "./stakenet-simulator-db" }
 thiserror = {version = "2.0.12"}
 tokio = { version = "1.43.0", features = ["full"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 validator-history = { package = "validator-history", features = ["no-entrypoint"], git = "https://github.com/jito-foundation/stakenet", branch = "tj/fix-deps-for-external" }
+jito-steward = { package = "jito-steward", features = ["no-entrypoint"], git = "https://github.com/jito-foundation/stakenet", branch = "tj/fix-deps-for-external" }

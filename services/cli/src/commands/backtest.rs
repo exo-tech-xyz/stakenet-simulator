@@ -46,6 +46,6 @@ pub struct BacktestArgs {
 }
 
 pub async fn handle_backtest(args: BacktestArgs, db_connection: &Pool<Postgres>) -> Result<()> {
-    let history_entries = fetch_all_validator_history_entries(db_connection);
+    let history_entries = fetch_all_validator_history_entries(db_connection).await?;
     Ok(())
 }
