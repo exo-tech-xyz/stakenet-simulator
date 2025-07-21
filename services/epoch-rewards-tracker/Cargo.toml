@@ -5,12 +5,16 @@ edition = "2024"
 
 [dependencies]
 anchor-lang = { workspace = true }
+borsh = "1.5.7"
 dotenvy = { workspace = true }
 envy = "0.4.2"
+futures = "0.3.21"
+regex = { workspace = true }
 serde = { workspace = true }
 solana-account-decoder-client-types = { workspace = true }
 solana-client = { workspace = true }
 solana-sdk = { workspace = true }
+solana-transaction-status-client-types= { workspace = true }
 sqlx = { workspace = true, features = ["postgres", "runtime-tokio-native-tls", "chrono", "bigdecimal" ] }
 stakenet-simulator-db = { workspace = true }
 thiserror = { workspace = true }

@@ -1457,12 +1457,16 @@ name = "epoch-rewards-tracker"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",
+ "borsh 1.5.7",
  "dotenvy",
  "envy",
+ "futures",
+ "regex",
  "serde",
  "solana-account-decoder-client-types",
  "solana-client",
  "solana-sdk",
+ "solana-transaction-status-client-types",
  "sqlx",
  "stakenet-simulator-db",
  "thiserror 2.0.12",
@@ -6539,9 +6543,15 @@ dependencies = [
 name = "stakenet-simulator-db"
 version = "0.1.0"
 dependencies = [
+ "num-bigint 0.4.6",
+ "num-traits",
  "serde",
  "serde_json",
+ "solana-client",
+ "solana-sdk",
  "sqlx",
+ "thiserror 2.0.12",
+ "tracing",
  "validator-history",
 ]
 

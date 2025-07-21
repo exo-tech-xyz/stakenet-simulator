@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS "public"."validator_history_entries"(
     "total_priority_fees" "public"."u_64",
     "total_leader_slots" BIGINT,
     "blocks_produced" BIGINT,
-    "block_data_updated_at_slot" "public"."u_64"
+    "block_data_updated_at_slot" "public"."u_64",
+    "priority_fee_merkle_root_upload_authority" SMALLINT DEFAULT 0 NOT NULL
 );
 
 --

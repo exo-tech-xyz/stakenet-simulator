@@ -1,13 +1,14 @@
-use serde::Serialize;
-use sqlx::Row;
+use serde::{Deserialize, Serialize};
 use sqlx::{
-    Error, Pool, Postgres, QueryBuilder,
+    Error, FromRow, Pool, Postgres, QueryBuilder, Row,
+    postgres::PgRow,
     types::{BigDecimal, Json},
 };
 use validator_history::{
-    ClientVersion as JitoClientVersion, MerkleRootUploadAuthority,
-    ValidatorHistoryEntry as JitoValidatorHistoryEntry,
+    ClientVersion as JitoClientVersion, ValidatorHistoryEntry as JitoValidatorHistoryEntry,
 };
+
+use crate::{big_decimal_u64::BigDecimalU64, decode_db, error::StakenetSimulatorDbError};
 
 pub struct ValidatorHistoryEntry {
     pub id: String,
@@ -15,7 +16,103 @@ pub struct ValidatorHistoryEntry {
     pub validator_history_entry: JitoValidatorHistoryEntry,
 }
 
+impl FromRow<'_, PgRow> for ValidatorHistoryEntry {
+    fn from_row(row: &PgRow) -> Result<Self, Error> {
+        let id = row.try_get("id")?;
+        let vote_pubkey = row.try_get("vote_pubkey")?;
+        let activated_stake_lamports: BigDecimalU64 = row.try_get("activated_stake_lamports")?;
+        let epoch: i32 = row.try_get("epoch")?;
+        let mev_commission: i32 = row.try_get("mev_commission")?;
+        let epoch_credits: i64 = row.try_get("epoch_credits")?;
+        let commission: i32 = row.try_get("commission")?;
+        let client_type: i16 = row.try_get("client_type")?;
+        let version: ClientVersion =
+            serde_json::from_value(row.try_get("version")?).map_err(|_| {
+                Error::Decode(Box::new(StakenetSimulatorDbError::DecodeError(
+                    String::from("version"),
+                )))
+            })?;
+        let ip: String = row.try_get("ip")?;
+        let merkle_root_upload_authority: i16 = row.try_get("merkle_root_upload_authority")?;
+        let is_superminority: i16 = row.try_get("is_superminority")?;
+        let rank: i64 = row.try_get("rank")?;
+        let vote_account_last_update_slot: BigDecimalU64 =
+            row.try_get("vote_account_last_update_slot")?;
+        let mev_earned: i64 = row.try_get("mev_earned")?;
+        let priority_fee_commission: i32 = row.try_get("priority_fee_commission")?;
+        let priority_fee_tips: BigDecimalU64 = row.try_get("priority_fee_tips")?;
+        let total_priority_fees: BigDecimalU64 = row.try_get("total_priority_fees")?;
+        let total_leader_slots: i64 = row.try_get("total_leader_slots")?;
+        let blocks_produced: i64 = row.try_get("blocks_produced")?;
+        let block_data_updated_at_slot: BigDecimalU64 =
+            row.try_get("block_data_updated_at_slot")?;
+        let priority_fee_merkle_root_upload_authority: i16 =
+            row.try_get("priority_fee_merkle_root_upload_authority")?;
+
+        let ip_converted: [u8; 4] = ip
+            .split(".")
+            .map(|x| u8::from_str_radix(x, 10).unwrap())
+            .collect::<Vec<u8>>()
+            .try_into()
+            .unwrap();
+
+        Ok(Self {
+            id,
+            vote_pubkey,
+            validator_history_entry: JitoValidatorHistoryEntry {
+                activated_stake_lamports: activated_stake_lamports.into(),
+                epoch: decode_db!(epoch, "epoch"),
+                mev_commission: decode_db!(mev_commission, "mev_commission"),
+                epoch_credits: decode_db!(epoch_credits, "epoch_credits"),
+                commission: decode_db!(commission, "commission"),
+                client_type: decode_db!(client_type, "client_type"),
+                version: JitoClientVersion {
+                    major: version.major,
+                    minor: version.minor,
+                    patch: version.patch,
+                },
+                ip: ip_converted,
+                merkle_root_upload_authority: int_to_upload_authority(merkle_root_upload_authority),
+                is_superminority: decode_db!(is_superminority, "is_superminority"),
+                rank: decode_db!(rank, "rank"),
+                vote_account_last_update_slot: vote_account_last_update_slot.into(),
+                mev_earned: decode_db!(mev_earned, "mev_earned"),
+                priority_fee_commission: decode_db!(
+                    priority_fee_commission,
+                    "priority_fee_commission"
+                ),
+                priority_fee_tips: priority_fee_tips.into(),
+                total_priority_fees: total_priority_fees.into(),
+                total_leader_slots: decode_db!(total_leader_slots, "total_leader_slots"),
+                blocks_produced: decode_db!(blocks_produced, "blocks_produced"),
+                block_data_updated_at_slot: block_data_updated_at_slot.into(),
+                priority_fee_merkle_root_upload_authority: int_to_upload_authority(
+                    priority_fee_merkle_root_upload_authority,
+                ),
+                ..JitoValidatorHistoryEntry::default()
+            },
+        })
+    }
+}
+
+fn int_to_upload_authority(int: i16) -> validator_history::MerkleRootUploadAuthority {
+    match int {
+        0 | 255 => validator_history::MerkleRootUploadAuthority::Unset,
+        1 => validator_history::MerkleRootUploadAuthority::Other,
+        2 => validator_history::MerkleRootUploadAuthority::OldJitoLabs,
+        3 => validator_history::MerkleRootUploadAuthority::TipRouter,
+        _ => {
+            panic!("unknown")
+        }
+    }
+}
+
 impl ValidatorHistoryEntry {
+    const NUM_FIELDS: u8 = 22;
+    // Based on the bind limit of postgres
+    const INSERT_CHUNK_SIZE: usize = 65534 / Self::NUM_FIELDS as usize;
+    const INSERT_QUERY: &str = "INSERT INTO validator_history_entries (id,vote_pubkey,activated_stake_lamports,epoch,mev_commission,epoch_credits,commission,client_type,version,ip,merkle_root_upload_authority,is_superminority,rank,vote_account_last_update_slot,mev_earned,priority_fee_commission,priority_fee_tips,total_priority_fees,total_leader_slots,blocks_produced,block_data_updated_at_slot,priority_fee_merkle_root_upload_authority) VALUES ";
+
     pub fn new(vote_pubkey: String, validator_history_entry: JitoValidatorHistoryEntry) -> Self {
         Self {
             id: format!("{}-{}", validator_history_entry.epoch, vote_pubkey),
@@ -23,13 +120,6 @@ impl ValidatorHistoryEntry {
             validator_history_entry,
         }
     }
-}
-
-impl ValidatorHistoryEntry {
-    const NUM_FIELDS: u8 = 21;
-    // Based on the bind limit of postgres
-    const INSERT_CHUNK_SIZE: usize = 65534 / Self::NUM_FIELDS as usize;
-    const INSERT_QUERY: &str = "INSERT INTO validator_history_entries (id,vote_pubkey,activated_stake_lamports,epoch,mev_commission,epoch_credits,commission,client_type,version,ip,merkle_root_upload_authority,is_superminority,rank,vote_account_last_update_slot,mev_earned,priority_fee_commission,priority_fee_tips,total_priority_fees,total_leader_slots,blocks_produced,block_data_updated_at_slot) VALUES ";
 
     pub async fn bulk_insert(
         db_connection: &Pool<Postgres>,
@@ -100,6 +190,11 @@ impl ValidatorHistoryEntry {
             separated.push_bind(BigDecimal::from(
                 record.validator_history_entry.block_data_updated_at_slot,
             ));
+            separated.push_bind(i16::from(
+                record
+                    .validator_history_entry
+                    .priority_fee_merkle_root_upload_authority as u8,
+            ));
 
             separated.push_unseparated(") ");
 
@@ -119,9 +214,62 @@ impl ValidatorHistoryEntry {
         }
         Ok(())
     }
+
+    pub async fn fetch_by_validator(
+        db_connection: &Pool<Postgres>,
+        vote_pubkey: &str,
+    ) -> Result<Vec<Self>, Error> {
+        sqlx::query_as::<_, Self>(&format!(
+            "SELECT * FROM validator_history_entries WHERE vote_pubkey = $1",
+        ))
+        .bind(vote_pubkey)
+        .fetch_all(db_connection)
+        .await
+    }
+
+    pub async fn fetch_by_validator_and_epoch(
+        db_connection: &Pool<Postgres>,
+        vote_pubkey: &str,
+        epoch: u64,
+    ) -> Result<Option<Self>, Error> {
+        let id = format!("{}-{}", epoch, vote_pubkey);
+        sqlx::query_as::<_, Self>(&format!(
+            "SELECT * FROM validator_history_entries WHERE id = $1",
+        ))
+        .bind(id)
+        .fetch_optional(db_connection)
+        .await
+    }
+
+    pub async fn get_all_vote_pubkeys(
+        db_connection: &Pool<Postgres>,
+    ) -> Result<Vec<String>, Error> {
+        let pubkeys = sqlx::query_as::<_, VotePubkey>(&format!(
+            "SELECT DISTINCT ON(vote_pubkey) vote_pubkey FROM validator_history_entries GROUP BY vote_pubkey",
+        ))
+        .fetch_all(db_connection)
+        .await?;
+
+        Ok(pubkeys.into_iter().map(|row| row.vote_pubkey).collect())
+    }
+
+    pub async fn fetch_all_validator_history_entries(
+        db_connection: &Pool<Postgres>,
+    ) -> Result<Vec<Self>, Error> {
+        sqlx::query_as::<_, Self>(&format!(
+            "SELECT * FROM validator_history_entries",
+        ))
+        .fetch_all(db_connection)
+        .await
+    }
 }
 
-#[derive(Serialize)]
+#[derive(FromRow)]
+struct VotePubkey {
+    vote_pubkey: String,
+}
+
+#[derive(Deserialize, Serialize)]
 pub struct ClientVersion {
     pub major: u8,
     pub minor: u8,
@@ -135,86 +283,4 @@ impl From<JitoClientVersion> for ClientVersion {
             patch: value.patch,
         }
     }
-}
-
-fn from_i32(value: i32) -> MerkleRootUploadAuthority {
-    match value {
-        1 => MerkleRootUploadAuthority::Other,
-        2 => MerkleRootUploadAuthority::OldJitoLabs,
-        3 => MerkleRootUploadAuthority::TipRouter,
-        _ => MerkleRootUploadAuthority::Unset,
-    }
-}
-
-fn try_from_i32_to_u8(value: i32) -> Result<u8, sqlx::Error> {
-    u8::try_from(value).map_err(|e| sqlx::Error::Decode(Box::new(e)))
-}
-
-fn try_from_i32_to_u16(value: i32) -> Result<u16, sqlx::Error> {
-    u16::try_from(value).map_err(|e| sqlx::Error::Decode(Box::new(e)))
-}
-
-fn try_from_i32_to_u32(value: i32) -> Result<u32, sqlx::Error> {
-    u32::try_from(value).map_err(|e| sqlx::Error::Decode(Box::new(e)))
-}
-
-fn try_from_i64_to_u64(value: i64) -> Result<u64, sqlx::Error> {
-    u64::try_from(value).map_err(|e| sqlx::Error::Decode(Box::new(e)))
-}
-
-const FETCH_QUERY: &str = "SELECT id,vote_pubkey,activated_stake_lamports,epoch,mev_commission,epoch_credits,commission,client_type,version,ip,merkle_root_upload_authority,is_superminority,rank,vote_account_last_update_slot,mev_earned,priority_fee_commission,priority_fee_tips,total_priority_fees,total_leader_slots,blocks_produced,block_data_updated_at_slot FROM validator_history_entries;";
-
-pub async fn fetch_all_validator_history_entries(
-    db_connection: &Pool<Postgres>,
-) -> Result<Vec<ValidatorHistoryEntry>, Error> {
-    let rows = sqlx::query(FETCH_QUERY).fetch_all(db_connection).await?;
-
-    let mut history_entries = Vec::new();
-
-    for row in rows {
-        let entry = ValidatorHistoryEntry {
-            id: row.get("id"),
-            vote_pubkey: row.get("vote_pubkey"),
-            validator_history_entry: JitoValidatorHistoryEntry {
-                activated_stake_lamports: try_from_i64_to_u64(
-                    row.get::<i64, _>("activated_stake_lamports"),
-                )?,
-                epoch: try_from_i32_to_u16(row.get::<i32, _>("epoch"))?,
-                mev_commission: try_from_i32_to_u16(row.get::<i32, _>("mev_commission"))?,
-                epoch_credits: try_from_i32_to_u32(row.get::<i32, _>("epoch_credits"))?,
-                commission: try_from_i32_to_u8(row.get::<i32, _>("commission"))?,
-                client_type: try_from_i32_to_u8(row.get::<i32, _>("client_type"))?,
-                version: JitoClientVersion {
-                    major: try_from_i32_to_u8(row.get::<i32, _>("version_major"))?,
-                    minor: try_from_i32_to_u8(row.get::<i32, _>("version_minor"))?,
-                    patch: try_from_i32_to_u16(row.get::<i32, _>("version_patch"))?,
-                },
-                ip: row.get("ip"),
-                merkle_root_upload_authority: from_i32(row.get("merkle_root_upload_authority")),
-                is_superminority: try_from_i32_to_u8(row.get::<i32, _>("is_superminority"))?,
-                rank: try_from_i32_to_u32(row.get::<i32, _>("rank"))?,
-                vote_account_last_update_slot: try_from_i64_to_u64(
-                    row.get::<i64, _>("vote_account_last_update_slot"),
-                )?,
-                mev_earned: try_from_i32_to_u32(row.get::<i32, _>("mev_earned"))?,
-                priority_fee_commission: try_from_i32_to_u16(
-                    row.get::<i32, _>("priority_fee_commission"),
-                )?,
-                padding0: row.get("padding0"),
-                priority_fee_tips: try_from_i64_to_u64(row.get::<i64, _>("priority_fee_tips"))?,
-                total_priority_fees: try_from_i64_to_u64(row.get::<i64, _>("total_priority_fees"))?,
-                total_leader_slots: try_from_i32_to_u32(row.get::<i32, _>("total_leader_slots"))?,
-                blocks_produced: try_from_i32_to_u32(row.get::<i32, _>("blocks_produced"))?,
-                block_data_updated_at_slot: try_from_i64_to_u64(
-                    row.get::<i64, _>("block_data_updated_at_slot"),
-                )?,
-                priority_fee_merkle_root_upload_authority: from_i32(
-                    row.get::<i32, _>("merkle_root_upload_authority"),
-                ),
-                padding1: row.get("padding1"),
-            },
-        };
-        history_entries.push(entry);
-    }
-    Ok(history_entries)
 }

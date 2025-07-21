@@ -1,7 +1,7 @@
 use anyhow::{Ok, Result};
 use clap::Parser;
 use sqlx::{Pool, Postgres};
-use stakenet_simulator_db::validator_history_entry::fetch_all_validator_history_entries;
+use stakenet_simulator_db::validator_history_entry::ValidatorHistoryEntry;
 
 #[derive(Clone, Debug, Parser)]
 pub struct BacktestArgs {
@@ -46,6 +46,6 @@ pub struct BacktestArgs {
 }
 
 pub async fn handle_backtest(args: BacktestArgs, db_connection: &Pool<Postgres>) -> Result<()> {
-    let history_entries = fetch_all_validator_history_entries(db_connection).await?;
+    let history_entries = ValidatorHistoryEntry::fetch_all_validator_history_entries(db_connection).await?;
     Ok(())
 }
