@@ -73,4 +73,20 @@ impl EpochPriorityFees {
 
         Ok(rows_affected)
     }
+
+    pub async fn fetch_identities_by_epoch(db_connection: &Pool<Postgres>, epoch: u64) -> Result<Vec<String>, Error> {
+        let pubkeys = sqlx::query_as::<_, IdentityPubkey>(&format!(
+            "SELECT identity_pubkey FROM epoch_priority_fees WHERE epoch = $1",
+        ))
+        .bind(BigDecimal::from(epoch))
+        .fetch_all(db_connection)
+        .await?;
+
+        Ok(pubkeys.into_iter().map(|row| row.identity_pubkey).collect())
+    }
+}
+
+#[derive(FromRow)]
+struct IdentityPubkey {
+    identity_pubkey: String,
 }

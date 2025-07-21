@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use anchor_lang::{
     prelude::{EpochSchedule, SlotHistory},
     solana_program::example_mocks::solana_sdk::sysvar::slot_history,
@@ -29,8 +31,13 @@ pub async fn gather_priority_fee_data_for_epoch(
         .await?
         .ok_or(EpochRewardsTrackerError::MissingLeaderSchedule(epoch))?;
     info!("Fin: get_leader_schedule");
+    let existing_records: HashSet<String> = EpochPriorityFees::fetch_identities_by_epoch(db_connection, epoch).await?.into_iter().collect();
 
     for (identity, leader_slots) in leader_schedule.into_iter() {
+      if existing_records.contains(&identity) {
+        info!("record exists, skipping {}", identity);
+        continue;
+      }
         let chunk_size = 25;
         info!("fetching blocks for leader {}", identity);
 
