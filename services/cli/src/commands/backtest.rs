@@ -46,6 +46,16 @@ pub struct BacktestArgs {
 }
 
 pub async fn handle_backtest(args: BacktestArgs, db_connection: &Pool<Postgres>) -> Result<()> {
-    let history_entries = ValidatorHistoryEntry::fetch_all_validator_history_entries(db_connection).await?;
+    // TODO (nice to have): Modify this fetch to only get the last X epochs worth of entries from
+    // each validator. X should be the longest range for a scoring metric.
+    let history_entries =
+        ValidatorHistoryEntry::fetch_all_validator_history_entries(db_connection).await?;
+    // TODO: Load the cluster history entries mapped by epoch
+
+    // TODO: map entries by valdiator, then epoch. Besure to use the u16 epoch representation
+    // TODO: For each validator run the valdiator_score algorithm and sort validators vote keys by
+    //  their score. Be sure to use modified Config parameters.
+    // TODO: Take the top Y validators, fetch their epoch rewards and active stake
+    // TODO: Calculate the estimated combined APY if stake was evenly distributed across all the validators
     Ok(())
 }

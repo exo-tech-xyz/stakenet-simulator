@@ -74,7 +74,10 @@ impl EpochPriorityFees {
         Ok(rows_affected)
     }
 
-    pub async fn fetch_identities_by_epoch(db_connection: &Pool<Postgres>, epoch: u64) -> Result<Vec<String>, Error> {
+    pub async fn fetch_identities_by_epoch(
+        db_connection: &Pool<Postgres>,
+        epoch: u64,
+    ) -> Result<Vec<String>, Error> {
         let pubkeys = sqlx::query_as::<_, IdentityPubkey>(&format!(
             "SELECT identity_pubkey FROM epoch_priority_fees WHERE epoch = $1",
         ))

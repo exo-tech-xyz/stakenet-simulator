@@ -1,9 +1,8 @@
+use std::collections::HashMap;
+
 use crate::commands::BacktestArgs;
 use crate::domain::CliError::*;
-use anchor_lang::{
-    AnchorDeserialize, AnchorSerialize, Result,
-    solana_program::pubkey::Pubkey,
-};
+use anchor_lang::{AnchorDeserialize, AnchorSerialize, Result, solana_program::pubkey::Pubkey};
 use jito_steward::state::Config;
 
 pub const COMMISSION_MAX: u8 = 100;
@@ -12,6 +11,7 @@ pub const BASIS_POINTS_MAX: u16 = 10_000;
 pub const TVC_MULTIPLIER: u32 = 16;
 pub const VALIDATOR_HISTORY_FIRST_RELIABLE_EPOCH: u64 = 0;
 
+use stakenet_simulator_db::validator_history_entry::ValidatorHistoryEntry;
 use validator_history::{ClusterHistory, MerkleRootUploadAuthority, ValidatorHistory};
 
 pub fn validator_score(
@@ -21,28 +21,48 @@ pub fn validator_score(
     current_epoch: u16,
     tvc_activation_epoch: u64,
     config: &Config,
+    epoch_to_validator_history_entries: HashMap<u16, ValidatorHistoryEntry>,
 ) -> Result<f64> {
     /////// Shared windows ///////
-    let mev_commission_window = validator.history.mev_commission_range(
-        current_epoch
-            .checked_sub(params.mev_commission_range)
-            .ok_or(ArithmeticError)?,
-        current_epoch,
-    );
+    let mev_commission_window: Vec<Option<u16>> = (current_epoch
+        .checked_sub(params.mev_commission_range)
+        .ok_or(ArithmeticError)?
+        ..=current_epoch)
+        .map(|epoch| {
+            epoch_to_validator_history_entries
+                .get(&epoch)
+                .map(|entry| entry.validator_history_entry.mev_commission)
+        })
+        .collect();
 
     let epoch_credits_start = current_epoch
         .checked_sub(params.epoch_credits_range)
         .ok_or(ArithmeticError)?;
     // Epoch credits should not include current epoch because it is in progress and data would be incomplete
     let epoch_credits_end = current_epoch.checked_sub(1).ok_or(ArithmeticError)?;
+    let epoch_credits_range = epoch_credits_start..=epoch_credits_end;
 
-    let normalized_epoch_credits_window = validator.history.epoch_credits_range_normalized(
-        epoch_credits_start,
-        epoch_credits_end,
-        tvc_activation_epoch,
-    );
+    let normalized_epoch_credits_window: Vec<Option<u32>> = epoch_credits_range
+        .map(|epoch| {
+            epoch_to_validator_history_entries
+                .get(&epoch)
+                .map(|entry| entry.validator_history_entry.epoch_credits)
+        })
+        .zip(epoch_credits_start..=epoch_credits_end)
+        .map(|(maybe_credits, epoch)| {
+            maybe_credits.map(|credits| {
+                if (epoch as u64) < tvc_activation_epoch {
+                    credits.saturating_mul(TVC_MULTIPLIER)
+                } else {
+                    credits
+                }
+            })
+        })
+        .collect();
 
-    let total_blocks_window = cluster
+    // TODO: Refactor below for the HashMap structure (After loading the cluster history)
+
+    let total_blocks_window: Vec<Option<u32>> = cluster
         .history
         .total_blocks_range(epoch_credits_start, epoch_credits_end);
 

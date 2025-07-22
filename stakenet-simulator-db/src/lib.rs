@@ -1,4 +1,5 @@
 mod big_decimal_u64;
+pub mod cluster_history_entry;
 pub mod epoch_priority_fees;
 pub mod epoch_rewards;
 pub mod error;
