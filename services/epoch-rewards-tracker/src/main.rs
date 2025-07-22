@@ -8,9 +8,15 @@ use tracing::{Level, error, info};
 use tracing_subscriber::EnvFilter;
 
 use crate::{
-    cluster_history::load_and_record_cluster_history, config::{Config, ConfigError}, inflation::{
+    cluster_history::load_and_record_cluster_history,
+    config::{Config, ConfigError},
+    inflation::{
         gather_inflation_rewards, gather_total_inflation_rewards_per_epoch, get_inflation_rewards,
-    }, priority_fees::gather_priority_fee_data_for_epoch, rpc_utils::{fetch_slot_history, RpcUtilsError}, stake_accounts::gather_stake_accounts, validator_history::load_and_record_validator_history
+    },
+    priority_fees::gather_priority_fee_data_for_epoch,
+    rpc_utils::{RpcUtilsError, fetch_slot_history},
+    stake_accounts::gather_stake_accounts,
+    validator_history::load_and_record_validator_history,
 };
 
 mod cluster_history;

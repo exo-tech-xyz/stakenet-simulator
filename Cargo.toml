@@ -25,5 +25,5 @@ thiserror = {version = "2.0.12"}
 tokio = { version = "1.43.0", features = ["full"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
-validator-history = { package = "validator-history", features = ["no-entrypoint"], git = "https://github.com/jito-foundation/stakenet", branch = "tj/fix-deps-for-external" }
-jito-steward = { package = "jito-steward", features = ["no-entrypoint"], git = "https://github.com/jito-foundation/stakenet", branch = "tj/fix-deps-for-external" }
+validator-history = { package = "validator-history", features = ["no-entrypoint"], git = "https://github.com/jito-foundation/stakenet", branch = "feat/add-priority-fee-support" }
+jito-steward = { package = "jito-steward", features = ["no-entrypoint"], git = "https://github.com/jito-foundation/stakenet", branch = "feat/add-priority-fee-support" }
