@@ -16,13 +16,14 @@ use validator_history::ValidatorHistory as JitoValidatorHistory;
 
 pub async fn load_and_record_validator_history(
     db_connection: &Pool<Postgres>,
-    rpc_url: String,
+    rpc_client: &RpcClient,
     program_id: Pubkey,
 ) -> Result<(), EpochRewardsTrackerError> {
-    let rpc_client = RpcClient::new(rpc_url);
+    let current_epoch_info = rpc_client.get_epoch_info().await?;
+    let last_finalized_epoch = current_epoch_info.epoch as u16;
+
     let validator_history_pubkeys =
         load_all_validator_history_pubkeys(&rpc_client, program_id).await?;
-    let last_finalized_epoch = 812;
     info!("Validator history pubkeys: {:?}", validator_history_pubkeys);
 
     // Load validator history from jito program

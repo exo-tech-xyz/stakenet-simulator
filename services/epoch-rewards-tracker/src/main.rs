@@ -1,5 +1,4 @@
 use std::{str::FromStr, sync::Arc};
-
 use solana_client::{client_error::ClientError, nonblocking::rpc_client::RpcClient};
 use solana_sdk::pubkey::{ParsePubkeyError, Pubkey};
 use sqlx::{Error as SqlxError, postgres::PgPoolOptions};
@@ -8,15 +7,9 @@ use tracing::{Level, error, info};
 use tracing_subscriber::EnvFilter;
 
 use crate::{
-    cluster_history::load_and_record_cluster_history,
-    config::{Config, ConfigError},
-    inflation::{
+    cluster_history::load_and_record_cluster_history, config::{Config, ConfigError}, inflation::{
         gather_inflation_rewards, gather_total_inflation_rewards_per_epoch, get_inflation_rewards,
-    },
-    priority_fees::gather_priority_fee_data_for_epoch,
-    rpc_utils::{RpcUtilsError, fetch_slot_history},
-    stake_accounts::gather_stake_accounts,
-    validator_history::load_and_record_validator_history,
+    }, priority_fees::gather_priority_fee_data_for_epoch, rpc_utils::{fetch_slot_history, RpcUtilsError}, stake_accounts::gather_stake_accounts, steward_utils::fetch_and_log_steward_config, validator_history::load_and_record_validator_history
 };
 
 mod cluster_history;
@@ -25,6 +18,7 @@ mod inflation;
 mod priority_fees;
 mod rpc_utils;
 mod stake_accounts;
+mod steward_utils;
 mod validator_history;
 
 #[derive(Debug, Error)]
@@ -83,8 +77,10 @@ async fn main() -> Result<(), EpochRewardsTrackerError> {
     let program_id = Pubkey::from_str(&config.validator_history_program_id).unwrap();
     let rpc_client = RpcClient::new(config.rpc_url.clone());
 
-    // load_and_record_validator_history(&db_conn_pool, config.rpc_url, program_id).await?;
-    load_and_record_cluster_history(&db_conn_pool, &rpc_client).await?;
+    // fetch_and_log_steward_config(&rpc_client).await?;
+
+    load_and_record_validator_history(&db_conn_pool, &rpc_client, program_id).await?;
+    // load_and_record_cluster_history(&db_conn_pool, &rpc_client).await?;
     // get_inflation_rewards(&db_conn_pool, &rpc_client).await?;
     // gather_stake_accounts(&db_conn_pool, &rpc_client).await?;
     // gather_inflation_rewards(&db_conn_pool, &rpc_client).await?;

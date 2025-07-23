@@ -49,7 +49,7 @@ impl ClusterHistory {
     }
 
     pub async fn fetch(db_connection: &Pool<Postgres>) -> Result<Self, SqlxError> {
-        sqlx::query_as::<_, Self>(&format!("SELECT * FROM cluster_histories WHERE id = 1",))
+        sqlx::query_as::<_, Self>(&format!("SELECT struct_version, bump, cluster_history_last_update_slot FROM cluster_histories WHERE id = 1",))
             .fetch_one(db_connection)
             .await
     }

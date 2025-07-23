@@ -5,7 +5,7 @@
 --
 CREATE TABLE IF NOT EXISTS "public"."cluster_histories"(
     "id" INTEGER NOT NULL PRIMARY KEY,
-    "struct_version" BIGINT NOT NULL,
+    "struct_version" "public"."u_64" NOT NULL,
     "bump" SMALLINT NOT NULL,
     "cluster_history_last_update_slot" "public"."u_64" NOT NULL
 );
