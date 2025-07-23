@@ -1,5 +1,6 @@
 use anyhow::{Ok, Result};
 use clap::Parser;
+use jito_steward::{constants::TVC_ACTIVATION_EPOCH, score::validator_score};
 use sqlx::{Pool, Postgres};
 use stakenet_simulator_db::{
     validator_history::ValidatorHistory, validator_history_entry::ValidatorHistoryEntry,
@@ -48,8 +49,13 @@ pub struct BacktestArgs {
 }
 
 pub async fn handle_backtest(args: BacktestArgs, db_connection: &Pool<Postgres>) -> Result<()> {
+    // TODO: Should we pull the current epoch from RPC or make it be a CLI argument?
+    let current_epoch = 817;
     let histories = ValidatorHistory::fetch_all(db_connection).await?;
     // TODO: Fetch the cluster history
+    // TODO: Convert cluster history to steward ClusterHistory
+
+    // TODO: Convert the args to Steward Config structure
     // For each validator, fetch their entries and score them
     for validator_history in histories {
         let mut entries = ValidatorHistoryEntry::fetch_by_validator(
@@ -60,13 +66,9 @@ pub async fn handle_backtest(args: BacktestArgs, db_connection: &Pool<Postgres>)
         // Convert DB structures into on-chain structures
         let jito_validator_history = validator_history.convert_to_jito_validator_history(&mut entries);
         // TODO: Score the validator
+        // let score = validator_score(&jito_validator_history, cluster, config, current_epoch, TVC_ACTIVATION_EPOCH);
     }
-
-    // TODO: Load the cluster history entries mapped by epoch
-
-    // TODO: map entries by valdiator, then epoch. Besure to use the u16 epoch representation
-    // TODO: For each validator run the valdiator_score algorithm and sort validators vote keys by
-    //  their score. Be sure to use modified Config parameters.
+    // TODO: Sort the validator's by score
     // TODO: Take the top Y validators, fetch their epoch rewards and active stake
     // TODO: Calculate the estimated combined APY if stake was evenly distributed across all the validators
     Ok(())
