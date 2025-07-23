@@ -1,7 +1,9 @@
 use anyhow::{Ok, Result};
 use clap::Parser;
 use sqlx::{Pool, Postgres};
-use stakenet_simulator_db::validator_history_entry::ValidatorHistoryEntry;
+use stakenet_simulator_db::{
+    validator_history::ValidatorHistory, validator_history_entry::ValidatorHistoryEntry,
+};
 
 #[derive(Clone, Debug, Parser)]
 pub struct BacktestArgs {
@@ -46,10 +48,20 @@ pub struct BacktestArgs {
 }
 
 pub async fn handle_backtest(args: BacktestArgs, db_connection: &Pool<Postgres>) -> Result<()> {
-    // TODO (nice to have): Modify this fetch to only get the last X epochs worth of entries from
-    // each validator. X should be the longest range for a scoring metric.
-    let history_entries =
-        ValidatorHistoryEntry::fetch_all_validator_history_entries(db_connection).await?;
+    let histories = ValidatorHistory::fetch_all(db_connection).await?;
+    // TODO: Fetch the cluster history
+    // For each validator, fetch their entries and score them
+    for validator_history in histories {
+        let mut entries = ValidatorHistoryEntry::fetch_by_validator(
+            db_connection,
+            &validator_history.vote_account,
+        )
+        .await?;
+        // Convert DB structures into on-chain structures
+        let jito_validator_history = validator_history.convert_to_jito_validator_history(&mut entries);
+        // TODO: Score the validator
+    }
+
     // TODO: Load the cluster history entries mapped by epoch
 
     // TODO: map entries by valdiator, then epoch. Besure to use the u16 epoch representation

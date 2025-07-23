@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use solana_sdk::system_program;
 use sqlx::{
     Error, FromRow, Pool, Postgres, QueryBuilder, Row,
     postgres::PgRow,
