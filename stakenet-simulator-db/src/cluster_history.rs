@@ -75,15 +75,15 @@ impl ClusterHistory {
             if let Some(last_entry) = cluster_history.history.last_mut() {
                 match last_entry.epoch.cmp(&entry.epoch) {
                     Ordering::Equal => {
-                        *last_entry = entry.into_jito_cluster_history_entry();
+                        *last_entry = entry.into();
                     }
                     Ordering::Greater => {
-                        *last_entry = entry.into_jito_cluster_history_entry();
+                        *last_entry = entry.into();
                     }
                     Ordering::Less => {
                         cluster_history
                             .history
-                            .push(entry.into_jito_cluster_history_entry());
+                            .push(entry.into());
                     }
                 }
             }

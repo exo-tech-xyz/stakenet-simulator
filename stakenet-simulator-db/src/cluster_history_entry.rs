@@ -23,6 +23,18 @@ impl From<JitoClusterHistoryEntry> for ClusterHistoryEntry {
     }
 }
 
+impl Into<JitoClusterHistoryEntry> for ClusterHistoryEntry {
+    fn into(self) -> JitoClusterHistoryEntry {
+        JitoClusterHistoryEntry {
+            total_blocks: self.total_blocks,
+            epoch: self.epoch,
+            padding0: [0u8; 2],
+            epoch_start_timestamp: self.epoch_start_timestamp,
+            padding: [0u8; 240],
+        }
+    }
+}
+
 impl ClusterHistoryEntry {
     const NUM_FIELDS: u8 = 3;
     // Based on the bind limit of postgres
@@ -76,15 +88,5 @@ impl ClusterHistoryEntry {
         sqlx::query_as::<_, Self>("SELECT * FROM cluster_history_entries")
             .fetch_all(db_connection)
             .await
-    }
-
-    pub fn into_jito_cluster_history_entry(self) -> JitoClusterHistoryEntry {
-        JitoClusterHistoryEntry {
-            total_blocks: self.total_blocks,
-            epoch: self.epoch,
-            padding0: [0u8; 2],
-            epoch_start_timestamp: self.epoch_start_timestamp,
-            padding: [0u8; 240],
-        }
     }
 }
