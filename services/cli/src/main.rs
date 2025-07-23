@@ -10,6 +10,7 @@ use crate::domain::Config;
 
 pub mod commands;
 pub mod domain;
+pub mod epoch_to_validator_history_entry;
 pub mod utils;
 
 #[derive(Parser, Debug)]

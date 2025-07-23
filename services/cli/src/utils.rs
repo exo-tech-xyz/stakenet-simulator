@@ -1,11 +1,17 @@
 use std::collections::HashMap;
 
-use crate::commands::BacktestArgs;
 use crate::domain::CliError::*;
+use crate::{
+    commands::BacktestArgs, epoch_to_validator_history_entry::EpochToValdiatorHistoryEntry,
+};
 use anchor_lang::{AnchorDeserialize, AnchorSerialize, Result, solana_program::pubkey::Pubkey};
+use jito_steward::score::{
+    calculate_instant_unstake_merkle_root_upload_auth, calculate_priority_fee_commission,
+};
 use jito_steward::{
     score::{
-        calculate_blacklist_score, calculate_commission, calculate_epoch_credits, calculate_historical_commission, calculate_merkle_root_authority_score, calculate_mev_commission, calculate_priority_fee_commission, calculate_superminority
+        calculate_blacklist_score, calculate_commission, calculate_epoch_credits,
+        calculate_mev_commission,
     },
     state::Config,
 };
@@ -19,7 +25,7 @@ pub const VALIDATOR_HISTORY_FIRST_RELIABLE_EPOCH: u64 = 0;
 use stakenet_simulator_db::{
     cluster_history_entry::ClusterHistoryEntry, validator_history_entry::ValidatorHistoryEntry,
 };
-use validator_history::{ClusterHistory, MerkleRootUploadAuthority, ValidatorHistory};
+use validator_history::{ClusterHistory, ValidatorHistory};
 
 pub fn validator_score(
     validator: &ValidatorHistory,
@@ -108,22 +114,27 @@ pub fn validator_score(
         params.commission_threshold,
     )?;
 
-    // TODO: Remove the dependency on `validator`
-
     let (historical_commission_score, _max_historical_commission, _max_historical_commission_epoch) =
         calculate_historical_commission(
-            validator,
+            &epoch_to_validator_history_entries,
             current_epoch,
             params.historical_commission_threshold,
         )?;
 
-    let (superminority_score, _superminority_epoch) =
-        calculate_superminority(validator, current_epoch, params.commission_range)?;
+    let (superminority_score, _superminority_epoch) = calculate_superminority(
+        &epoch_to_validator_history_entries,
+        current_epoch,
+        params.commission_range,
+    )?;
 
+    // TODO: We'll need to add validator index information to the DB somewhere
     let blacklisted_score = calculate_blacklist_score(config, validator.index)?;
+    let mapping = EpochToValdiatorHistoryEntry(epoch_to_validator_history_entries);
 
-    let merkle_root_upload_authority_score = calculate_merkle_root_authority_score(validator)?;
+    let merkle_root_upload_authority_score =
+        calculate_merkle_root_authority_score(&mapping, current_epoch)?;
 
+    // TODO: Remove the dependency on `validator`
     let (
         priority_fee_commission_score,
         _max_priority_fee_commission,
@@ -146,6 +157,125 @@ pub fn validator_score(
         * priority_fee_commission_score;
 
     Ok(score)
+}
+
+/// Checks if validator is in the top 1/3 of validators by stake for the current epoch
+pub fn calculate_superminority(
+    epoch_to_validator_history_entries: &HashMap<u16, ValidatorHistoryEntry>,
+    current_epoch: u16,
+    commission_range: u16,
+) -> Result<(f64, u16)> {
+    let default_history_entry = validator_history::ValidatorHistoryEntry::default();
+    /*
+        If epoch credits exist, we expect the validator to have a superminority flag set. If not, scoring fails and we wait for
+        the stake oracle to call UpdateStakeHistory.
+        If epoch credits is not set, we iterate through last `commission_range` epochs to find the latest superminority flag.
+        If no entry is found, we assume the validator is not a superminority validator.
+    */
+    let current_entry = epoch_to_validator_history_entries.get(&current_epoch);
+    // REVIEW: This conditional logic changed based on DBentries
+    if current_entry.is_some()
+        && current_entry.unwrap().validator_history_entry.epoch_credits
+            != default_history_entry.epoch_credits
+    {
+        if current_entry
+            .unwrap()
+            .validator_history_entry
+            .is_superminority
+            == 1
+        {
+            Ok((0.0, current_epoch))
+        } else if current_entry
+            .unwrap()
+            .validator_history_entry
+            .is_superminority
+            == default_history_entry.is_superminority
+        {
+            Err(StakeHistoryNotRecentEnough.into())
+        } else {
+            Ok((1.0, EPOCH_DEFAULT))
+        }
+    } else {
+        let superminority_window: Vec<Option<u8>> = (current_epoch
+            .checked_sub(commission_range)
+            .ok_or(ArithmeticError)?
+            ..=current_epoch)
+            .map(|epoch| {
+                epoch_to_validator_history_entries
+                    .get(&epoch)
+                    .map(|maybe_entry| maybe_entry.validator_history_entry.is_superminority)
+            })
+            .collect();
+
+        let (status, epoch) = superminority_window
+            .iter()
+            .rev()
+            .enumerate()
+            .filter_map(|(i, &superminority)| {
+                superminority.map(|s| (s, current_epoch.checked_sub(i as u16)))
+            })
+            .next()
+            .unwrap_or((0, Some(current_epoch)));
+
+        let epoch = epoch.ok_or(ArithmeticError)?;
+
+        if status == 1 {
+            Ok((0.0, epoch))
+        } else {
+            Ok((1.0, EPOCH_DEFAULT))
+        }
+    }
+}
+
+/// Checks if validator has commission above a threshold in any epoch in their history
+pub fn calculate_historical_commission(
+    epoch_to_validator_history_entries: &HashMap<u16, ValidatorHistoryEntry>,
+    current_epoch: u16,
+    historical_commission_threshold: u8,
+) -> Result<(f64, u8, u16)> {
+    let (max_historical_commission, max_historical_commission_epoch) = (0..=current_epoch)
+        .rev()
+        .map(|epoch| {
+            let maybe_commission = epoch_to_validator_history_entries
+                .get(&epoch)
+                .map(|maybe_entry| maybe_entry.validator_history_entry.commission);
+            (epoch, maybe_commission)
+        })
+        .filter_map(|(i, commission)| commission.map(|c| (c, current_epoch.checked_sub(i as u16))))
+        .max_by_key(|&(commission, _)| commission)
+        .unwrap_or((0, Some(VALIDATOR_HISTORY_FIRST_RELIABLE_EPOCH as u16)));
+
+    let max_historical_commission_epoch = max_historical_commission_epoch.ok_or(ArithmeticError)?;
+
+    let historical_commission_score =
+        if max_historical_commission <= historical_commission_threshold {
+            1.0
+        } else {
+            0.0
+        };
+
+    Ok((
+        historical_commission_score,
+        max_historical_commission,
+        max_historical_commission_epoch,
+    ))
+}
+
+/// Checks if validator is using appropriate TDA MerkleRootUploadAuthority
+pub fn calculate_merkle_root_authority_score(
+    epoch_to_validator_history_entries: &EpochToValdiatorHistoryEntry,
+    current_epoch: u16,
+) -> Result<f64> {
+    let latest_entry = epoch_to_validator_history_entries.get_latest(current_epoch);
+    let latest_authority =
+        latest_entry.map(|x| x.validator_history_entry.merkle_root_upload_authority);
+    // calculate_instant_unstake_merkle_root_upload_auth returns whether or not
+    // instant unstake should be triggered, so we invert the result to get the score
+    if calculate_instant_unstake_merkle_root_upload_auth(&latest_authority)? {
+        Ok(0.0)
+    } else {
+        Ok(1.0)
+    }
 }
 
 /// Given a validator's tips and total fees, determine their realized commission rate
@@ -382,19 +512,4 @@ pub fn calculate_instant_unstake_blacklist(config: &Config, validator_index: u32
     config
         .validator_history_blacklist
         .get(validator_index as usize)
-}
-
-/// Checks if the validator is using allowed Tip Distribution merkle root upload authority
-pub fn calculate_instant_unstake_merkle_root_upload_auth(
-    latest_authority: &Option<MerkleRootUploadAuthority>,
-) -> Result<bool> {
-    if let Some(merkle_root_upload_authority) = latest_authority {
-        match merkle_root_upload_authority {
-            MerkleRootUploadAuthority::OldJitoLabs => Ok(false),
-            MerkleRootUploadAuthority::TipRouter => Ok(false),
-            _ => Ok(true),
-        }
-    } else {
-        Ok(false)
-    }
 }
