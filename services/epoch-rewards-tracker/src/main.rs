@@ -83,8 +83,8 @@ async fn main() -> Result<(), EpochRewardsTrackerError> {
     let program_id = Pubkey::from_str(&config.validator_history_program_id).unwrap();
     let rpc_client = RpcClient::new(config.rpc_url.clone());
 
-    load_and_record_validator_history(&db_conn_pool, config.rpc_url, program_id).await?;
-    // load_and_record_cluster_history(&db_conn_pool, &rpc_client).await?;
+    // load_and_record_validator_history(&db_conn_pool, config.rpc_url, program_id).await?;
+    load_and_record_cluster_history(&db_conn_pool, &rpc_client).await?;
     // get_inflation_rewards(&db_conn_pool, &rpc_client).await?;
     // gather_stake_accounts(&db_conn_pool, &rpc_client).await?;
     // gather_inflation_rewards(&db_conn_pool, &rpc_client).await?;

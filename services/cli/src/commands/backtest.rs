@@ -64,7 +64,8 @@ pub async fn handle_backtest(args: BacktestArgs, db_connection: &Pool<Postgres>)
         )
         .await?;
         // Convert DB structures into on-chain structures
-        let jito_validator_history = validator_history.convert_to_jito_validator_history(&mut entries);
+        let jito_validator_history =
+            validator_history.convert_to_jito_validator_history(&mut entries);
         // TODO: Score the validator
         // let score = validator_score(&jito_validator_history, cluster, config, current_epoch, TVC_ACTIVATION_EPOCH);
     }
