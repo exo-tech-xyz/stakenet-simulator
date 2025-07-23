@@ -8,9 +8,11 @@ use solana_client::{
 };
 use solana_sdk::pubkey::Pubkey;
 use sqlx::{Pool, Postgres};
-use stakenet_simulator_db::validator_history_entry::ValidatorHistoryEntry;
+use stakenet_simulator_db::{
+    validator_history::ValidatorHistory, validator_history_entry::ValidatorHistoryEntry,
+};
 use tracing::info;
-use validator_history::ValidatorHistory;
+use validator_history::ValidatorHistory as JitoValidatorHistory;
 
 pub async fn load_and_record_validator_history(
     db_connection: &Pool<Postgres>,
@@ -43,7 +45,7 @@ pub async fn load_and_record_validator_history(
                 validator_history_pubkey,
             ))?;
         let validator_history =
-            ValidatorHistory::try_deserialize(&mut account.data.as_slice()).unwrap();
+            JitoValidatorHistory::try_deserialize(&mut account.data.as_slice()).unwrap();
         let vote_pubkey = validator_history.vote_account;
         let entries: Vec<ValidatorHistoryEntry> = validator_history
             .history
@@ -59,6 +61,8 @@ pub async fn load_and_record_validator_history(
             .collect();
         info!("Inserting {} entries for {}", entries.len(), vote_pubkey);
         ValidatorHistoryEntry::bulk_insert(db_connection, entries).await?;
+        info!("Inserting ValidatorHistory for {}", vote_pubkey);
+        ValidatorHistory::bulk_insert(db_connection, vec![validator_history.into()]).await?;
     }
     Ok(())
 }
@@ -69,7 +73,7 @@ pub async fn load_all_validator_history_pubkeys(
 ) -> Result<Vec<Pubkey>, EpochRewardsTrackerError> {
     let discriminator_filter = RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
         0,
-        &ValidatorHistory::DISCRIMINATOR,
+        &JitoValidatorHistory::DISCRIMINATOR,
     ));
     let config = RpcProgramAccountsConfig {
         filters: Some(vec![discriminator_filter]),

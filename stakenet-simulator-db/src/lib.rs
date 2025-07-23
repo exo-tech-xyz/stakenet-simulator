@@ -6,4 +6,5 @@ pub mod error;
 pub mod inflation_rewards;
 mod macros;
 pub mod stake_accounts;
+pub mod validator_history;
 pub mod validator_history_entry;
