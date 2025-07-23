@@ -3,7 +3,7 @@ use clap::Parser;
 use jito_steward::{constants::TVC_ACTIVATION_EPOCH, score::validator_score};
 use sqlx::{Pool, Postgres};
 use stakenet_simulator_db::{
-    validator_history::ValidatorHistory, validator_history_entry::ValidatorHistoryEntry,
+    cluster_history::ClusterHistory, cluster_history_entry::ClusterHistoryEntry, validator_history::ValidatorHistory, validator_history_entry::ValidatorHistoryEntry
 };
 
 #[derive(Clone, Debug, Parser)]
@@ -50,10 +50,13 @@ pub struct BacktestArgs {
 
 pub async fn handle_backtest(args: BacktestArgs, db_connection: &Pool<Postgres>) -> Result<()> {
     // TODO: Should we pull the current epoch from RPC or make it be a CLI argument?
-    let current_epoch = 817;
+    let current_epoch = 822;
     let histories = ValidatorHistory::fetch_all(db_connection).await?;
-    // TODO: Fetch the cluster history
-    // TODO: Convert cluster history to steward ClusterHistory
+    // Fetch the cluster history
+    let cluster_history = ClusterHistory::fetch(db_connection).await?;
+    let cluster_history_entries = ClusterHistoryEntry::fetch_all(db_connection).await?;
+    // Convert cluster history to steward ClusterHistory
+    let jito_cluster_history = cluster_history.convert_to_jito_cluster_history(cluster_history_entries);
 
     // TODO: Convert the args to Steward Config structure
     // For each validator, fetch their entries and score them

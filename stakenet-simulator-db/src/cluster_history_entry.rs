@@ -7,6 +7,7 @@ use validator_history::ClusterHistoryEntry as JitoClusterHistoryEntry;
 pub struct ClusterHistoryEntry {
     #[sqlx(try_from = "i32")]
     pub epoch: u16,
+    #[sqlx(try_from = "i64")]
     pub total_blocks: u32,
     #[sqlx(try_from = "BigDecimalU64")]
     pub epoch_start_timestamp: u64,
@@ -69,5 +70,21 @@ impl ClusterHistoryEntry {
             query.execute(db_connection).await?;
         }
         Ok(())
+    }
+
+    pub async fn fetch_all(db_connection: &Pool<Postgres>) -> Result<Vec<Self>, SqlxError> {
+        sqlx::query_as::<_, Self>("SELECT * FROM cluster_history_entries")
+            .fetch_all(db_connection)
+            .await
+    }
+
+    pub fn into_jito_cluster_history_entry(self) -> JitoClusterHistoryEntry {
+        JitoClusterHistoryEntry {
+            total_blocks: self.total_blocks,
+            epoch: self.epoch,
+            padding0: [0u8; 2],
+            epoch_start_timestamp: self.epoch_start_timestamp,
+            padding: [0u8; 240],
+        }
     }
 }
