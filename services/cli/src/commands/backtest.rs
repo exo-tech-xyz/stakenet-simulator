@@ -31,6 +31,14 @@ pub struct BacktestArgs {
     #[arg(long, env)]
     pub historical_commission_threshold: Option<u8>,
     #[arg(long, env)]
+    pub priority_fee_lookback_epochs: Option<u8>,
+    #[arg(long, env)]
+    pub priority_fee_lookback_offset: Option<u8>,
+    #[arg(long, env)]
+    pub priority_fee_max_commission_bps: Option<u16>,
+    #[arg(long, env)]
+    pub priority_fee_error_margin_bps: Option<u16>,
+    #[arg(long, env)]
     pub num_delegation_validators: Option<u32>,
     #[arg(long, env)]
     pub scoring_unstake_cap_bps: Option<u32>,
@@ -51,6 +59,8 @@ pub struct BacktestArgs {
     #[arg(long, env)]
     pub minimum_voting_epochs: Option<u64>,
     #[arg(long, env)]
+    priority_fee_scoring_start_epoch: Option<u16>,
+    #[arg(long, env)]
     target_epoch: Option<u64>,
 }
 
@@ -68,16 +78,21 @@ impl BacktestArgs {
         modify_config_parameter_from_args!(self, config, mev_commission_bps_threshold);
         modify_config_parameter_from_args!(self, config, commission_threshold);
         modify_config_parameter_from_args!(self, config, historical_commission_threshold);
+        modify_config_parameter_from_args!(self, config, priority_fee_lookback_epochs);
+        modify_config_parameter_from_args!(self, config, priority_fee_lookback_offset);
+        modify_config_parameter_from_args!(self, config, priority_fee_max_commission_bps);
+        modify_config_parameter_from_args!(self, config, priority_fee_error_margin_bps);
         modify_config_parameter_from_args!(self, config, num_delegation_validators);
         modify_config_parameter_from_args!(self, config, scoring_unstake_cap_bps);
         modify_config_parameter_from_args!(self, config, instant_unstake_cap_bps);
         modify_config_parameter_from_args!(self, config, stake_deposit_unstake_cap_bps);
-        modify_config_parameter_from_args!(self, config, instant_unstake_epoch_progress);
         modify_config_parameter_from_args!(self, config, compute_score_slot_range);
+        modify_config_parameter_from_args!(self, config, instant_unstake_epoch_progress);
         modify_config_parameter_from_args!(self, config, instant_unstake_inputs_epoch_progress);
         modify_config_parameter_from_args!(self, config, num_epochs_between_scoring);
         modify_config_parameter_from_args!(self, config, minimum_stake_lamports);
         modify_config_parameter_from_args!(self, config, minimum_voting_epochs);
+        modify_config_parameter_from_args!(self, config, priority_fee_scoring_start_epoch);
     }
 }
 
