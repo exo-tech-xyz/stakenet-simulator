@@ -81,11 +81,11 @@ impl ClusterHistory {
                         *last_entry = entry.into();
                     }
                     Ordering::Less => {
-                        cluster_history
-                            .history
-                            .push(entry.into());
+                        cluster_history.history.push(entry.into());
                     }
                 }
+            } else {
+                cluster_history.history.push(entry.into());
             }
         }
 

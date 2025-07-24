@@ -4,10 +4,12 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum CliError {
-  #[error("Solana ClientError: {0}")]
-  ClientError(#[from] ClientError),
+    #[error("Solana ClientError: {0}")]
+    ClientError(#[from] ClientError),
 
-  #[error("SqlxError: {0}")]
-  SqlxError(#[from] SqlxError)
+    #[error("SqlxError: {0}")]
+    SqlxError(#[from] SqlxError),
 
+    #[error("AnchorDeserializeError")]
+    AnchorDeserializeError,
 }

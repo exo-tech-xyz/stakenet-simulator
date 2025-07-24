@@ -20,7 +20,11 @@ struct Cli {
     #[arg(short, long, env)]
     pub rpc_url: String,
 
-    #[arg(long, env, default_value = "postgresql://postgres:postgres@127.0.0.1:54322/postgres")]
+    #[arg(
+        long,
+        env,
+        default_value = "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+    )]
     pub db_connection_url: String,
 
     #[command(subcommand)]

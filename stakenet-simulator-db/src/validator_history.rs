@@ -128,6 +128,10 @@ impl ValidatorHistory {
                             .push(entry.validator_history_entry);
                     }
                 }
+            } else {
+                validator_history
+                    .history
+                    .push(entry.validator_history_entry);
             }
         }
 
