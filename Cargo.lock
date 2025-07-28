@@ -6527,6 +6527,7 @@ dependencies = [
  "clap",
  "dotenvy",
  "envy",
+ "futures",
  "jito-steward",
  "serde",
  "shlex",

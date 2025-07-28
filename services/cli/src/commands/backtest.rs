@@ -1,6 +1,5 @@
-use std::time::Duration;
-
 use clap::Parser;
+use futures::stream::{self, StreamExt};
 use jito_steward::{Config, constants::TVC_ACTIVATION_EPOCH, score::validator_score};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use sqlx::{Pool, Postgres};
@@ -9,6 +8,7 @@ use stakenet_simulator_db::{
     validator_history::ValidatorHistory, validator_history_entry::ValidatorHistoryEntry,
 };
 use tracing::{error, info};
+use validator_history::ClusterHistory as JitoClusterHistory;
 
 use crate::{error::CliError, modify_config_parameter_from_args, steward_utils::fetch_config};
 
@@ -108,7 +108,6 @@ pub async fn handle_backtest(
     let mut steward_config = fetch_config(&rpc_client).await?;
     args.update_steward_config(&mut steward_config);
 
-    // TODO: We should filter this down. There are a lot of entries where they don't have up to date data and scoring fails
     let histories = ValidatorHistory::fetch_all(db_connection).await?;
     // Fetch the cluster history
     let cluster_history = ClusterHistory::fetch(db_connection).await?;
@@ -118,39 +117,62 @@ pub async fn handle_backtest(
         cluster_history.convert_to_jito_cluster_history(cluster_history_entries);
 
     // For each validator, fetch their entries and score them
-    for validator_history in histories {
-        let mut entries = ValidatorHistoryEntry::fetch_by_validator(
-            db_connection,
-            &validator_history.vote_account,
-        )
-        .await?;
-        // Convert DB structures into on-chain structures
-        let jito_validator_history =
-            validator_history.convert_to_jito_validator_history(&mut entries);
-        // Score the validator
-        info!("Scoring validator: {}", jito_validator_history.vote_account);
-        let score_result = validator_score(
-            &jito_validator_history,
-            &jito_cluster_history,
-            &steward_config,
-            current_epoch,
-            TVC_ACTIVATION_EPOCH,
-        );
-        match score_result {
-            Ok(score) => {
-                info!("Score: {:?}", score);
-            }
-            Err(_) => {
-                error!(
-                    "Erroring scoring validator {}",
-                    jito_validator_history.vote_account
-                );
-            }
-        }
-        tokio::time::sleep(Duration::from_secs(5)).await;
-    }
-    // TODO: Sort the validator's by score
+    let batch_size = 10;
+    let futures: Vec<_> = histories
+        .into_iter()
+        .map(|x| {
+            score_validator(
+                db_connection,
+                x,
+                &jito_cluster_history,
+                &steward_config,
+                current_epoch,
+            )
+        })
+        .collect();
+    let results: Vec<_> = futures::stream::iter(futures)
+        .buffer_unordered(batch_size)
+        .collect()
+        .await;
+    let mut results: Vec<(String, f64)> = results.into_iter().filter_map(Result::ok).collect();
+    // Sort the validator's by score
+    results.sort_by(|a, b| b.1.total_cmp(&a.1) );
+
     // TODO: Take the top Y validators, fetch their epoch rewards and active stake
+    
     // TODO: Calculate the estimated combined APY if stake was evenly distributed across all the validators
     Ok(())
+}
+
+pub async fn score_validator(
+    db_connection: &Pool<Postgres>,
+    validator_history: ValidatorHistory,
+    jito_cluster_history: &JitoClusterHistory,
+    steward_config: &Config,
+    current_epoch: u16,
+) -> Result<(String, f64), CliError> {
+    let mut entries =
+        ValidatorHistoryEntry::fetch_by_validator(db_connection, &validator_history.vote_account)
+            .await?;
+    let vote_account = validator_history.vote_account.clone();
+    // Convert DB structures into on-chain structures
+    let jito_validator_history = validator_history.convert_to_jito_validator_history(&mut entries);
+    // Score the validator
+    let score_result = validator_score(
+        &jito_validator_history,
+        jito_cluster_history,
+        &steward_config,
+        current_epoch,
+        TVC_ACTIVATION_EPOCH,
+    );
+    match score_result {
+        Ok(score) => Ok((vote_account, score.score)),
+        Err(_) => {
+            error!(
+                "Erroring scoring validator {}",
+                jito_validator_history.vote_account
+            );
+            Ok((vote_account, 0.0))
+        }
+    }
 }

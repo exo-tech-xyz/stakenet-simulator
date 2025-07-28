@@ -11,6 +11,7 @@ bytemuck = { features = ["derive", "min_const_generics"], version = "1.13.1" }
 thiserror = { workspace = true }
 serde = { workspace = true }
 clap = { version = "4", features = ["derive", "env"] }
+futures = "0.3.31"
 shlex = "1.3.0"
 solana-client = { workspace = true }
 solana-sdk = { workspace = true }
