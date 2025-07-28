@@ -1,20 +1,25 @@
+use crate::big_decimal_u64::BigDecimalU64;
 use sqlx::{Error, FromRow, Pool, Postgres, QueryBuilder, types::BigDecimal};
 
 #[derive(FromRow)]
 pub struct EpochRewards {
     pub id: String,
     pub vote_pubkey: String,
+    #[sqlx(try_from = "BigDecimalU64")]
     pub epoch: u64,
+    #[sqlx(try_from = "i16")]
     pub inflation_commission_bps: u16,
-    #[sqlx(try_from = "i64")]
+    #[sqlx(try_from = "BigDecimalU64")]
     pub total_inflation_rewards: u64,
+    #[sqlx(try_from = "i16")]
     pub mev_commission_bps: u16,
-    #[sqlx(try_from = "i64")]
+    #[sqlx(try_from = "BigDecimalU64")]
     pub total_mev_rewards: u64,
+    #[sqlx(try_from = "i16")]
     pub priority_fee_commission_bps: u16,
-    #[sqlx(try_from = "i64")]
+    #[sqlx(try_from = "BigDecimalU64")]
     pub total_priority_fee_rewards: u64,
-    #[sqlx(try_from = "i64")]
+    #[sqlx(try_from = "BigDecimalU64")]
     pub active_stake: u64,
 }
 
@@ -69,5 +74,19 @@ impl EpochRewards {
             query.execute(db_connection).await?;
         }
         Ok(())
+    }
+
+    pub async fn fetch_for_validators_and_epochs(
+        db_connection: &Pool<Postgres>,
+        vote_accounts: &Vec<String>,
+        start_epoch: u64,
+        end_epoch: u64,
+    ) -> Result<Vec<Self>, Error> {
+        sqlx::query_as::<_, Self>(&format!(
+            "SELECT * FROM epoch_rewards WHERE vote_pubkey = ANY($1) AND epoch BETWEE $2 AND $3",
+        ))
+        .bind(vote_accounts)
+        .fetch_all(db_connection)
+        .await
     }
 }

@@ -5,7 +5,8 @@ use solana_client::nonblocking::rpc_client::RpcClient;
 use sqlx::{Pool, Postgres};
 use stakenet_simulator_db::{
     cluster_history::ClusterHistory, cluster_history_entry::ClusterHistoryEntry,
-    validator_history::ValidatorHistory, validator_history_entry::ValidatorHistoryEntry,
+    epoch_rewards::EpochRewards, validator_history::ValidatorHistory,
+    validator_history_entry::ValidatorHistoryEntry,
 };
 use tracing::{error, info};
 use validator_history::ClusterHistory as JitoClusterHistory;
@@ -103,6 +104,8 @@ pub async fn handle_backtest(
 ) -> Result<(), CliError> {
     // TODO: Should we pull the current epoch from RPC or make it be a CLI argument?
     let current_epoch = 821;
+    // TODO: Determine how this should be passed. The number of epochs to look back
+    let look_back_period = 50;
 
     // Load existing steward config and overwrite parameters based on CLI args
     let mut steward_config = fetch_config(&rpc_client).await?;
@@ -136,10 +139,17 @@ pub async fn handle_backtest(
         .await;
     let mut results: Vec<(String, f64)> = results.into_iter().filter_map(Result::ok).collect();
     // Sort the validator's by score
-    results.sort_by(|a, b| b.1.total_cmp(&a.1) );
+    results.sort_by(|a, b| b.1.total_cmp(&a.1));
 
-    // TODO: Take the top Y validators, fetch their epoch rewards and active stake
-    
+    // Take the top Y validators, fetch their epoch rewards and active stake
+    let top_validators: Vec<String> = results.into_iter().take(200).map(|x| x.0).collect();
+    let rewards = EpochRewards::fetch_for_validators_and_epochs(
+        db_connection,
+        &top_validators,
+        (current_epoch - look_back_period).into(),
+        current_epoch.into(),
+    )
+    .await?;
     // TODO: Calculate the estimated combined APY if stake was evenly distributed across all the validators
     Ok(())
 }
