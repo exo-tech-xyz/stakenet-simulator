@@ -249,3 +249,17 @@ fn calculate_apy(r: f64, t: f64, n: f64) -> f64 {
     // APY = (1 + r)^(n/t) - 1
     (1.0 + r).powf(n / t) - 1.0
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_apy_calculation() {
+        let r = 0.02; // 2% return
+        let t = 2.0;  // 2-day period
+        let n = 365.0; // Days in a year
+        let apy = calculate_apy(r, t, n);
+        assert!((apy - 36.113).abs() < 0.001, "APY calculation is incorrect");
+    }
+}
