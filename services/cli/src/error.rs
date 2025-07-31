@@ -12,4 +12,7 @@ pub enum CliError {
 
     #[error("AnchorDeserializeError")]
     AnchorDeserializeError,
+
+    #[error("ArithmeticError")]
+    ArithmeticError,
 }

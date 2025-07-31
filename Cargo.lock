@@ -6529,6 +6529,7 @@ dependencies = [
  "envy",
  "futures",
  "jito-steward",
+ "num-traits",
  "serde",
  "shlex",
  "solana-client",
