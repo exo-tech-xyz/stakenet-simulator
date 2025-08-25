@@ -91,6 +91,8 @@ pub async fn rebalancing_simulation(
     Ok(rebalancing_cycles)
 }
 
+/// Scores all validators at `scoring_epoch` and returns the top `number_of_validators` vote 
+/// account pubkeys
 async fn top_validators_for_epoch(
     db_connection: &Pool<Postgres>,
     histories: &[ValidatorHistory],
@@ -168,6 +170,8 @@ pub async fn score_validator(
     }
 }
 
+/// Simulates a Steward cycle where stake has been rebalanced and each validator starts with 
+/// `starting_stake_per_validator`.
 async fn simulate_returns(
     db_connection: &Pool<Postgres>,
     selected_validators: &[String],
