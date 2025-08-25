@@ -1,23 +1,14 @@
+use crate::utils::{
+    calculate_aggregated_apy, calculate_stake_utilization_rate, rebalancing_simulation,
+};
 use crate::{error::CliError, modify_config_parameter_from_args, steward_utils::fetch_config};
 use clap::Parser;
-use futures::stream::StreamExt;
-use jito_steward::{Config, constants::TVC_ACTIVATION_EPOCH, score::validator_score};
-use num_traits::cast::ToPrimitive;
+use jito_steward::Config;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::native_token::LAMPORTS_PER_SOL;
-use sqlx::types::BigDecimal;
 use sqlx::{Pool, Postgres};
-use stakenet_simulator_db::{
-    active_stake_jito_sol::ActiveStakeJitoSol, cluster_history::ClusterHistory,
-    cluster_history_entry::ClusterHistoryEntry, epoch_rewards::EpochRewards,
-    inactive_stake_jito_sol::InactiveStakeJitoSol, validator_history::ValidatorHistory,
-    validator_history_entry::ValidatorHistoryEntry,
-};
-use std::collections::HashMap;
-use tracing::{error, info};
-use validator_history::ClusterHistory as JitoClusterHistory;
+use tracing::info;
 
-const DAYS_PER_YEAR: f64 = 365.0;
+pub const DAYS_PER_YEAR: f64 = 365.0;
 
 #[derive(Clone, Debug, Parser)]
 pub struct BacktestArgs {
@@ -69,6 +60,8 @@ pub struct BacktestArgs {
     priority_fee_scoring_start_epoch: Option<u16>,
     #[arg(long, env)]
     target_epoch: Option<u64>,
+    #[arg(long, env)]
+    steward_cycle_rate: Option<u64>,
 }
 
 impl BacktestArgs {
@@ -115,240 +108,36 @@ pub async fn handle_backtest(
     // TODO: Determine if this should be an argument
     let number_of_validator_delegations = 200;
 
+    let steward_cycle_rate = args.steward_cycle_rate.unwrap_or(10) as u16;
+
     // Load existing steward config and overwrite parameters based on CLI args
     let mut steward_config = fetch_config(&rpc_client).await?;
     args.update_steward_config(&mut steward_config);
 
-    let histories = ValidatorHistory::fetch_all(db_connection).await?;
-    // Fetch the cluster history
-    let cluster_history = ClusterHistory::fetch(db_connection).await?;
-    let cluster_history_entries = ClusterHistoryEntry::fetch_all(db_connection).await?;
-    // Convert cluster history to steward ClusterHistory
-    let jito_cluster_history =
-        cluster_history.convert_to_jito_cluster_history(cluster_history_entries);
+    let simulation_start_epoch = current_epoch - look_back_period;
+    let simulation_end_epoch = current_epoch;
 
-    // For each validator, fetch their entries and score them
-    let batch_size = 10;
-    let futures: Vec<_> = histories
-        .into_iter()
-        .map(|x| {
-            score_validator(
-                db_connection,
-                x,
-                &jito_cluster_history,
-                &steward_config,
-                current_epoch,
-            )
-        })
-        .collect();
-    let results: Vec<_> = futures::stream::iter(futures)
-        .buffer_unordered(batch_size)
-        .collect()
-        .await;
-    let mut results: Vec<(String, f64)> = results.into_iter().filter_map(Result::ok).collect();
-    // Sort the validator's by score
-    results.sort_by(|a: &(String, f64), b| b.1.total_cmp(&a.1));
-
-    // Take the top Y validators, fetch their epoch rewards and active stake
-    let top_validators: Vec<String> = results
-        .into_iter()
-        .take(number_of_validator_delegations)
-        .map(|x| x.0)
-        .collect();
-    let rewards = EpochRewards::fetch_for_validators_and_epochs(
+    let rebalancing_cycles = rebalancing_simulation(
         db_connection,
-        &top_validators,
-        (current_epoch - look_back_period).into(),
-        current_epoch.into(),
+        &steward_config,
+        simulation_start_epoch,
+        simulation_end_epoch,
+        steward_cycle_rate,
+        number_of_validator_delegations,
     )
     .await?;
-    // group the rewards by validator
-    let mut validator_rewards: HashMap<String, Vec<EpochRewards>> = HashMap::new();
-    for reward in rewards {
-        validator_rewards
-            .entry(reward.vote_pubkey.clone())
-            .or_insert_with(Vec::new)
-            .push(reward);
-    }
 
-    // Convert HashMap to Vec and sort each inner Vec by epoch
-    let mut result: Vec<Vec<EpochRewards>> = validator_rewards.into_values().collect();
-    for inner_vec in &mut result {
-        inner_vec.sort_by_key(|reward| reward.epoch);
-    }
-    // Simulate 1 SOL being actively staked to each validator. For each epoch, the
-    // active_stake input for the next epoch should increase by the proportional rewards
-    // received.
-    let lamports_after_staking: u64 = result
-        .into_iter()
-        .map(|x| {
-            x.into_iter()
-                .fold(LAMPORTS_PER_SOL, |current_active_stake, epoch_rewards| {
-                    epoch_rewards.stake_after_epoch(current_active_stake)
-                })
-        })
-        .sum();
-
-    // Average the rate of return across all validators in the set.
-    let total_starting_lamports = LAMPORTS_PER_SOL
-        .checked_mul(number_of_validator_delegations as u64)
-        .ok_or(CliError::ArithmeticError)?;
-
-    let rate_of_return: f64 = (lamports_after_staking - total_starting_lamports)
-        .to_f64()
-        .ok_or(CliError::ArithmeticError)?
-        / total_starting_lamports
-            .to_f64()
-            .ok_or(CliError::ArithmeticError)?;
-
-    // Extrapolate to yearly for APY
-    // Estimates epochs are 2 days (432_000 slots per epoch, 400ms per slot)
-    let look_back_period_in_days =
-        look_back_period.to_f64().ok_or(CliError::ArithmeticError)? * 2.0;
-    assert!(look_back_period_in_days < DAYS_PER_YEAR);
-    let apy = calculate_apy(rate_of_return, look_back_period_in_days, DAYS_PER_YEAR);
+    let aggregated_apy = calculate_aggregated_apy(&rebalancing_cycles, look_back_period)?;
 
     let stake_utilization_ratio =
         calculate_stake_utilization_rate(db_connection, look_back_period, current_epoch).await?;
 
-    let final_apy = apy * stake_utilization_ratio;
-    info!("APY : {}", final_apy);
+    let final_apy = aggregated_apy * stake_utilization_ratio;
+
+    info!("Rebalancing cycles completed: {}", rebalancing_cycles.len());
+    info!("Raw aggregated APY: {:.4}%", aggregated_apy * 100.0);
+    info!("Stake utilization ratio: {:.4}", stake_utilization_ratio);
+    info!("Final adjusted APY: {:.4}%", final_apy * 100.0);
 
     Ok(())
-}
-
-pub async fn score_validator(
-    db_connection: &Pool<Postgres>,
-    validator_history: ValidatorHistory,
-    jito_cluster_history: &JitoClusterHistory,
-    steward_config: &Config,
-    current_epoch: u16,
-) -> Result<(String, f64), CliError> {
-    let mut entries =
-        ValidatorHistoryEntry::fetch_by_validator(db_connection, &validator_history.vote_account)
-            .await?;
-    let vote_account = validator_history.vote_account.clone();
-    // Convert DB structures into on-chain structures
-    let jito_validator_history = validator_history.convert_to_jito_validator_history(&mut entries);
-    // Score the validator
-    let score_result = validator_score(
-        &jito_validator_history,
-        jito_cluster_history,
-        &steward_config,
-        current_epoch,
-        TVC_ACTIVATION_EPOCH,
-    );
-    match score_result {
-        Ok(score) => Ok((vote_account, score.score)),
-        Err(_) => {
-            error!(
-                "Erroring scoring validator {}",
-                jito_validator_history.vote_account
-            );
-            Ok((vote_account, 0.0))
-        }
-    }
-}
-
-fn calculate_apy(r: f64, t: f64, n: f64) -> f64 {
-    // APY = (1 + r)^(n/t) - 1
-    (1.0 + r).powf(n / t) - 1.0
-}
-
-fn calculate_stake_utilization(
-    total_active_balance: &BigDecimal,
-    total_inactive_balance: &BigDecimal,
-) -> Result<f64, CliError> {
-    let total_stake = total_active_balance.clone() + total_inactive_balance.clone();
-
-    if total_stake == BigDecimal::from(0) {
-        return Ok(0.0);
-    }
-
-    let utilization_rate = total_active_balance
-        .to_f64()
-        .ok_or(CliError::ArithmeticError)?
-        / total_stake.to_f64().ok_or(CliError::ArithmeticError)?;
-
-    Ok(utilization_rate)
-}
-
-async fn calculate_stake_utilization_rate(
-    db_connection: &Pool<Postgres>,
-    lookback_period: u16,
-    current_epoch: u16,
-) -> Result<f64, CliError> {
-    if lookback_period > current_epoch {
-        return Err(CliError::LookBackPeriodTooBig);
-    }
-
-    let (active_stake_data, inactive_stake_data) = futures::join!(
-        ActiveStakeJitoSol::fetch_balance_for_epoch_range(
-            db_connection,
-            current_epoch as u64,
-            lookback_period as u64,
-        ),
-        InactiveStakeJitoSol::fetch_balance_for_epoch_range(
-            db_connection,
-            current_epoch as u64,
-            lookback_period as u64,
-        )
-    );
-
-    let active_stake_data = active_stake_data?;
-    let inactive_stake_data = inactive_stake_data?;
-
-    if active_stake_data.count != inactive_stake_data.count {
-        return Err(CliError::RecordCountMismatch {
-            active_count: active_stake_data.count,
-            inactive_count: inactive_stake_data.count,
-        });
-    }
-
-    calculate_stake_utilization(&active_stake_data.balance, &inactive_stake_data.balance)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use sqlx::types::BigDecimal;
-
-    #[test]
-    fn test_apy_calculation() {
-        let r = 0.02; // 2% return
-        let t = 2.0; // 2-day period
-        let n = 365.0; // Days in a year
-        let apy = calculate_apy(r, t, n);
-        assert!((apy - 36.113).abs() < 0.001, "APY calculation is incorrect");
-    }
-
-    #[test]
-    fn test_calculate_stake_utilization_rate_from_balances() {
-        // INACTIVE BALANCE is 0
-        let active_balance = BigDecimal::from(100);
-        let inactive_balance = BigDecimal::from(0);
-        let result = calculate_stake_utilization(&active_balance, &inactive_balance);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), 1.0);
-
-        // ACTIVE BALANCE is 0
-        let active_balance = BigDecimal::from(0);
-        let inactive_balance = BigDecimal::from(100);
-        let result = calculate_stake_utilization(&active_balance, &inactive_balance);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), 0.0);
-
-        // TOTAL BALANCE is 0
-        let active_balance = BigDecimal::from(0);
-        let inactive_balance = BigDecimal::from(0);
-        let result = calculate_stake_utilization(&active_balance, &inactive_balance);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), 0.0);
-
-        let active_balance = BigDecimal::from(800);
-        let inactive_balance = BigDecimal::from(200);
-        let result = calculate_stake_utilization(&active_balance, &inactive_balance);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), 0.8);
-    }
 }

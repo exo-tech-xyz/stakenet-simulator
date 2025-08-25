@@ -5,7 +5,7 @@ use solana_sdk::pubkey::Pubkey;
 use sqlx::{Error as SqlxError, Pool, Postgres, QueryBuilder, prelude::FromRow, types::BigDecimal};
 use validator_history::{CircBuf, ValidatorHistory as JitoValidatorHistory};
 
-#[derive(FromRow)]
+#[derive(FromRow, Clone)]
 pub struct ValidatorHistory {
     #[sqlx(try_from = "i64")]
     pub struct_version: u32,
