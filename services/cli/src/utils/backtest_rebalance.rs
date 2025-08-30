@@ -1,6 +1,10 @@
 use crate::error::CliError;
 use futures::future::try_join_all;
-use jito_steward::{Config, constants::TVC_ACTIVATION_EPOCH, score::validator_score};
+use jito_steward::{
+    Config,
+    constants::TVC_ACTIVATION_EPOCH,
+    score::{instant_unstake_validator, validator_score},
+};
 use solana_sdk::native_token::LAMPORTS_PER_SOL;
 use sqlx::{Pool, Postgres};
 use stakenet_simulator_db::{
@@ -33,23 +37,18 @@ pub async fn rebalancing_simulation(
 ) -> Result<Vec<RebalancingCycle>, CliError> {
     let mut rebalancing_cycles = Vec::new();
     let mut current_cycle_start = simulation_start_epoch;
-
     let mut lamports_after_staking = LAMPORTS_PER_SOL
         .checked_mul(number_of_validator_delegations as u64)
         .ok_or(CliError::ArithmeticError)?;
-
     let histories = ValidatorHistory::fetch_all(db_connection).await?;
     let cluster_history = ClusterHistory::fetch(db_connection).await?;
     let cluster_history_entries = ClusterHistoryEntry::fetch_all(db_connection).await?;
     let jito_cluster_history =
         cluster_history.convert_to_jito_cluster_history(cluster_history_entries);
-
     let jito_cluster_history = Arc::new(jito_cluster_history);
-
     info!("Fetching all validator history entries...");
     let all_entries =
         ValidatorHistoryEntry::fetch_all_validator_history_entries(db_connection).await?;
-
     let mut entries_by_validator: HashMap<String, Vec<ValidatorHistoryEntry>> = HashMap::new();
     for entry in all_entries {
         entries_by_validator
@@ -57,56 +56,141 @@ pub async fn rebalancing_simulation(
             .or_insert_with(Vec::new)
             .push(entry);
     }
-
     let entries_by_validator = Arc::new(entries_by_validator);
-
     info!(
         "Grouped {} validators' history entries",
         entries_by_validator.len()
     );
 
-    while current_cycle_start < simulation_end_epoch {
+    let mut top_validators = Vec::new();
+
+    for current_epoch in simulation_start_epoch..simulation_end_epoch {
+        let starting_stake_per_validator =
+            lamports_after_staking / number_of_validator_delegations as u64;
         let current_cycle_end = std::cmp::min(
             current_cycle_start + steward_cycle_rate,
             simulation_end_epoch,
         );
+        if (current_epoch - simulation_start_epoch) % steward_cycle_rate == 0 {
+            top_validators = top_validators_for_epoch(
+                &histories,
+                &entries_by_validator,
+                &jito_cluster_history,
+                steward_config,
+                current_epoch,
+                number_of_validator_delegations,
+            )
+            .await?;
 
-        let starting_stake_per_validator =
-            lamports_after_staking / number_of_validator_delegations as u64;
+            // THE POSITION OF THIS DEPENDS ON THE LOGIC OF HOW THE STAKE IS REDISTRIBUTED IN AN
+            // UNSTAKE.
+            let (cycle_ending_lamports, cycle_result) = simulate_returns(
+                db_connection,
+                &top_validators,
+                current_cycle_start,
+                current_cycle_end,
+                lamports_after_staking,
+                starting_stake_per_validator,
+            )
+            .await?;
+            info!(
+                "Cycle ending lamports: {:.3} SOL (was {:.3} SOL)",
+                cycle_ending_lamports as f64 / LAMPORTS_PER_SOL as f64,
+                lamports_after_staking as f64 / LAMPORTS_PER_SOL as f64
+            );
+            lamports_after_staking = cycle_ending_lamports;
+            rebalancing_cycles.push(cycle_result);
+            current_cycle_start = current_cycle_end;
+        }
 
-        let top_validators = top_validators_for_epoch(
+        // TBD: WOULD WE RECALCULATE THIS IF THE TOP VALIDATORS ARE CALCULATED IN THE current_epoch ONLY?
+        let validators_to_unstake = calculate_unstake_per_epoch(
+            &top_validators,
             &histories,
             &entries_by_validator,
             &jito_cluster_history,
             steward_config,
-            current_cycle_start,
-            number_of_validator_delegations,
-        )
-        .await?;
-
-        let (cycle_ending_lamports, cycle_result) = simulate_returns(
-            db_connection,
-            &top_validators,
-            current_cycle_start,
-            current_cycle_end,
-            lamports_after_staking,
-            starting_stake_per_validator,
+            current_epoch,
         )
         .await?;
 
         info!(
-            "Cycle ending lamports: {:.3} SOL (was {:.3} SOL)",
-            cycle_ending_lamports as f64 / LAMPORTS_PER_SOL as f64,
-            lamports_after_staking as f64 / LAMPORTS_PER_SOL as f64
+            "{} validators unstaked for epoch {}",
+            validators_to_unstake.len(),
+            current_epoch
         );
-
-        lamports_after_staking = cycle_ending_lamports;
-
-        rebalancing_cycles.push(cycle_result);
-        current_cycle_start = current_cycle_end;
     }
 
     Ok(rebalancing_cycles)
+}
+
+async fn calculate_unstake_per_epoch(
+    selected_validators: &[String],
+    histories: &[ValidatorHistory],
+    entries_by_validator: &Arc<HashMap<String, Vec<ValidatorHistoryEntry>>>,
+    jito_cluster_history: &Arc<JitoClusterHistory>,
+    steward_config: &Config,
+    epoch: u16,
+) -> Result<Vec<String>, CliError> {
+    info!(
+        "Checking instant unstake for epoch {} on {} validators",
+        epoch,
+        selected_validators.len()
+    );
+    let epoch_start_slot = epoch as u64 * 432000;
+    let unstake_tasks: Vec<_> = selected_validators
+        .iter()
+        .filter_map(|validator_vote_account| {
+            histories
+                .iter()
+                .find(|vh| vh.vote_account == *validator_vote_account)
+                .map(|validator_history| {
+                    let validator_history = validator_history.clone();
+                    let entries_by_validator = Arc::clone(entries_by_validator);
+                    let jito_cluster_history = Arc::clone(jito_cluster_history);
+                    let steward_config = steward_config.clone();
+                    let vote_account = validator_vote_account.clone();
+                    tokio::task::spawn_blocking(move || {
+                        let unstake_result = calculate_instant_unstake(
+                            validator_history,
+                            &entries_by_validator,
+                            &jito_cluster_history,
+                            &steward_config,
+                            epoch_start_slot,
+                            epoch,
+                        );
+                        (vote_account, unstake_result)
+                    })
+                })
+        })
+        .collect();
+    let unstake_results = try_join_all(unstake_tasks)
+        .await
+        .map_err(|e| CliError::TaskJoinError(e))?;
+
+    let mut validators_to_unstake = Vec::new();
+
+    for (vote_account, result) in unstake_results {
+        match result {
+            Ok(should_unstake) => {
+                if should_unstake {
+                    // UNCOMMENT AFTER WE HAVE THE DATA
+                    // warn!(
+                    //     "INSTANT UNSTAKE: Validator {} at epoch {}",
+                    //     vote_account, epoch
+                    // );
+                    validators_to_unstake.push(vote_account);
+                }
+            }
+            Err(e) => {
+                error!(
+                    "Error checking instant unstake for validator {} at epoch {}: {:?}",
+                    vote_account, epoch, e
+                );
+            }
+        }
+    }
+    Ok(validators_to_unstake)
 }
 
 async fn top_validators_for_epoch(
@@ -251,7 +335,8 @@ async fn simulate_returns(
 
             final_stake
         } else {
-            error!("No rewards for validator: {}", validator);
+            // TODO: Uncomment when we get actual data (For now this is overwhelming)
+            // error!("No rewards for validator: {}", validator);
             starting_stake_per_validator
         };
 
@@ -276,4 +361,42 @@ async fn simulate_returns(
     };
 
     Ok((total_ending_lamports, cycle_result))
+}
+
+fn calculate_instant_unstake(
+    validator_history: ValidatorHistory,
+    entries_by_validator: &HashMap<String, Vec<ValidatorHistoryEntry>>,
+    jito_cluster_history: &JitoClusterHistory,
+    config: &Config,
+    epoch_start_slot: u64,
+    current_epoch: u16,
+) -> Result<bool, CliError> {
+    let vote_account = validator_history.vote_account.clone();
+    let mut entries = entries_by_validator
+        .get(&vote_account)
+        .cloned()
+        .unwrap_or_default();
+
+    let jito_validator_history = validator_history.convert_to_jito_validator_history(&mut entries);
+
+    let unstake_result = instant_unstake_validator(
+        &jito_validator_history,
+        jito_cluster_history,
+        config,
+        epoch_start_slot,
+        current_epoch,
+        TVC_ACTIVATION_EPOCH,
+    );
+
+    match unstake_result {
+        Ok(unstake) => Ok(unstake.instant_unstake),
+        Err(_) => {
+            error!(
+                "Error calculating instant unstake for validator {}",
+                jito_validator_history.vote_account
+            );
+            // TBD: Is there is an error in calculating, we should NOT unstake the validator?
+            Ok(false)
+        }
+    }
 }
