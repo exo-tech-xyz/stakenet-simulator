@@ -11,10 +11,36 @@ use tracing::{info, warn};
 #[derive(Debug, Deserialize, Clone)]
 struct EpochReward {
     epoch: u64,
+    #[serde(alias = "vote_account")]
     vote_accounts: String,
+    #[serde(default, deserialize_with = "empty_f64")]
     inflation_commission_pct: f64,
+    #[serde(default, deserialize_with = "empty_f64")]
     total_inflation_rewards: f64,
+    #[serde(default, deserialize_with = "empty_u64")]
     block_rewards: u64,
+}
+
+fn empty_f64<'de, D>(deserializer: D) -> Result<f64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let opt = Option::<String>::deserialize(deserializer)?;
+    Ok(opt
+        .and_then(|s| if s.trim().is_empty() { None } else { Some(s) })
+        .map(|s| s.parse::<f64>().unwrap_or(0.0))
+        .unwrap_or(0.0))
+}
+
+fn empty_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let opt = Option::<String>::deserialize(deserializer)?;
+    Ok(opt
+        .and_then(|s| if s.trim().is_empty() { None } else { Some(s) })
+        .map(|s| s.parse::<u64>().unwrap_or(0))
+        .unwrap_or(0))
 }
 
 #[derive(Debug, Deserialize)]

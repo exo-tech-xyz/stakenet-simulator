@@ -1,5 +1,6 @@
 use crate::utils::{
-    calculate_aggregated_apy, calculate_stake_utilization_rate, rebalancing_simulation,
+    RebalancingCycle, RebalancingSimulator, calculate_aggregated_apy,
+    calculate_stake_utilization_rate,
 };
 use crate::{error::CliError, modify_config_parameter_from_args, steward_utils::fetch_config};
 use clap::Parser;
@@ -102,7 +103,7 @@ pub async fn handle_backtest(
     rpc_client: &RpcClient,
 ) -> Result<(), CliError> {
     // TODO: Should we pull the current epoch from RPC or make it be a CLI argument?
-    let current_epoch: u16 = 840;
+    let current_epoch: u16 = 800;
     // TODO: Determine how this should be passed. The number of epochs to look back
     let look_back_period = 50;
     // TODO: Determine if this should be an argument
@@ -145,4 +146,30 @@ pub async fn handle_backtest(
     info!("Final adjusted APY: {:.4}%", final_apy * 100.0);
 
     Ok(())
+}
+
+pub async fn rebalancing_simulation(
+    db_connection: &Pool<Postgres>,
+    steward_config: &Config,
+    simulation_start_epoch: u16,
+    simulation_end_epoch: u16,
+    steward_cycle_rate: u16,
+    number_of_validator_delegations: usize,
+    instant_unstake_cap_bps: u32,
+    validator_historical_start_offset: u16,
+) -> Result<Vec<RebalancingCycle>, CliError> {
+    let mut simulator = RebalancingSimulator::new(
+        db_connection,
+        steward_config.clone(),
+        simulation_start_epoch,
+        simulation_end_epoch,
+        steward_cycle_rate,
+        number_of_validator_delegations,
+        instant_unstake_cap_bps,
+        validator_historical_start_offset,
+    )
+    .await?;
+
+    // Run the simulation
+    simulator.run_simulation(db_connection).await
 }
