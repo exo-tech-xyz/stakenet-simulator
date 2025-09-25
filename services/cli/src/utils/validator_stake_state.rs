@@ -5,11 +5,13 @@ pub struct ValidatorStakeState {
     pub active: u64,
     pub activating: u64,
     pub deactivating: u64,
+    pub target: u64,
+    pub desired_target: u64,
 }
 
 impl ValidatorStakeState {
     pub fn total(&self) -> u64 {
-        self.active + self.activating
+        self.active + self.activating + self.deactivating
     }
 
     pub fn add_activating_stake(&mut self, amount: u64) {
@@ -30,7 +32,6 @@ impl ValidatorStakeState {
         // Activating stake becomes active
         self.active += self.activating;
         self.activating = 0;
-
         // Deactivating stake is removed
         self.deactivating = 0;
     }
@@ -40,11 +41,9 @@ impl ValidatorStakeState {
         if self.active == 0 {
             return Ok(());
         }
-
         let active_f64 = self.active as f64;
         let adjustment = active_f64 * ratio;
         let new_active = (active_f64 + adjustment).max(0.0) as u64;
-
         self.active = new_active;
         Ok(())
     }
