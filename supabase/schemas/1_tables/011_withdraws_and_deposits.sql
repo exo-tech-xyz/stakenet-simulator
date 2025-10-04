@@ -9,8 +9,7 @@ CREATE TABLE
         "epoch" "public"."u_64" NOT NULL,
         "vote_pubkey" "public"."solana_pubkey",
         "withdraw_stake" NUMERIC(20, 9) DEFAULT 0,
-        "deposit_stake" NUMERIC(20, 9) DEFAULT 0,
-        "total_stake" NUMERIC(20, 9) DEFAULT 0,
+        "deposit_stake" NUMERIC(20, 9) DEFAULT 0
     );
 
 --

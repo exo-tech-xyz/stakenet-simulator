@@ -179,7 +179,9 @@ export DUNE_API_KEY={YOUR_DUNE_API_KEY}
 
 ./target/release/epoch-rewards-tracker fetch-inactive-stake
 
-./target/release/epoch-rewards-tracker withdraw-and-deposits
+./target/release/epoch-rewards-tracker withdraw-and-deposit-stake
+
+./target/release/epoch-rewards-tracker withdraw-and-deposit-sol
 
 ./target/release/epoch-rewards-tracker fetch-cluster-history
 
@@ -191,4 +193,5 @@ export DUNE_API_KEY={YOUR_DUNE_API_KEY}
 ```
 
 ## Additional Information 
-We have intentionally converted `priority_fee_merkle_root_upload_authority` all DNE to Unset for calculation purposes. Should be removed when the issue is solved.
+- We have intentionally converted `priority_fee_merkle_root_upload_authority` all DNE to Unset for calculation purposes. Should be removed when the issue is solved.
+- To factor in manual SOL deposits and withdraws, we are equally distributing the net of that epoch to all the validators, irrespective of their stake. 
