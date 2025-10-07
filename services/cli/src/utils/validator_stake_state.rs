@@ -35,8 +35,8 @@ impl ValidatorStakeState {
         self.deactivating = 0;
     }
 
-    /// Apply stake change proportionally to active stake only
-    pub fn apply_stake_change(&mut self, ratio: f64) -> Result<(), CliError> {
+    /// This increases the activated stake by the `ratio` provided
+    pub fn increase_activating_stake(&mut self, ratio: f64) -> Result<(), CliError> {
         if self.active == 0 {
             return Ok(());
         }

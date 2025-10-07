@@ -101,14 +101,14 @@ impl RebalancingSimulator {
         )
         .await?;
 
-        let withdraw_and_deposit_sol = WithdrawAndDepositSol::get_details_for_epoch_range(
+        let withdraw_and_deposit_sol = WithdrawAndDepositSol::get_records_for_epoch_range(
             db_connection,
             simulation_start_epoch.into(),
             simulation_end_epoch.into(),
         )
         .await?;
 
-        let withdraws_and_deposits_stakes = WithdrawsAndDepositStakes::get_details_for_epoch_range(
+        let withdraws_and_deposits_stakes = WithdrawsAndDepositStakes::get_records_for_epoch_range(
             db_connection,
             simulation_start_epoch.into(),
             simulation_end_epoch.into(),
@@ -721,7 +721,7 @@ impl RebalancingSimulator {
                     let stake_change_ratio = net_stake_change / epoch_data.active_balance;
                     let old_active = stake_state.active;
 
-                    stake_state.apply_stake_change(stake_change_ratio)?;
+                    stake_state.increase_activating_stake(stake_change_ratio)?;
                     let new_active = stake_state.active;
 
                     info!(
@@ -789,7 +789,7 @@ impl RebalancingSimulator {
                         0.0
                     };
 
-                    stake_state.apply_stake_change(validator_ratio)?;
+                    stake_state.increase_activating_stake(validator_ratio)?;
                 }
             }
 
@@ -1109,7 +1109,7 @@ impl RebalancingSimulator {
         epoch_map
     }
 
-    /// This returns the hashmap of manual withdraws and deposits of SOL epochwise
+    /// This returns the hashmap of epoch to `WithdrawAndDepositSol` consisting of withdraw/deposit SOL and total `active_stake``
     fn build_sol_epoch_map(
         withdraw_and_deposit_sol: Vec<WithdrawAndDepositSol>,
         active_stake: &Vec<ActiveStakeJitoSol>,

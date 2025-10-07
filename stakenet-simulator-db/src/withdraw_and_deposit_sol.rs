@@ -65,7 +65,7 @@ impl WithdrawAndDepositSol {
         Ok(())
     }
 
-    pub async fn get_details_for_epoch_range(
+    pub async fn get_records_for_epoch_range(
         db_connection: &Pool<Postgres>,
         start_epoch: i64,
         end_epoch: i64,
