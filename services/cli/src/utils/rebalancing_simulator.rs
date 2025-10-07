@@ -14,27 +14,33 @@ use stakenet_simulator_db::{
     active_stake_jito_sol::ActiveStakeJitoSol, cluster_history::ClusterHistory,
     cluster_history_entry::ClusterHistoryEntry, epoch_rewards::EpochRewards,
     validator_history::ValidatorHistory, validator_history_entry::ValidatorHistoryEntry,
-    withdraw_and_deposits::WithdrawsAndDeposits,
+    withdraw_and_deposit_sol::WithdrawAndDepositSol,
+    withdraw_and_deposits_stake::WithdrawsAndDepositStakes,
 };
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tracing::{error, info};
 use validator_history::ClusterHistory as JitoClusterHistory;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct RebalancingCycle {
     pub starting_total_lamports: u64,
     pub ending_total_lamports: u64,
 }
 
-#[derive(Debug, Clone)]
 pub struct EpochWithdrawDepositStakeData {
     pub withdraw_stake: f64,
     pub deposit_stake: f64,
     pub active_balance: f64,
 }
 
-#[derive(Clone, Debug)]
+pub struct EpochWithdrawDepositSOLData {
+    pub active_stake: f64,
+    pub deposit_sol: f64,
+    pub withdraw_sol: f64,
+}
+
+#[derive(Clone)]
 pub struct ValidatorWithScore {
     pub vote_account: String,
     pub score: f64,
@@ -60,7 +66,8 @@ pub struct RebalancingSimulator {
     pub histories: Vec<ValidatorHistory>,
     pub jito_cluster_history: Arc<JitoClusterHistory>,
     pub entries_by_validator: Arc<HashMap<String, Vec<ValidatorHistoryEntry>>>,
-    pub epoch_map: HashMap<u64, Vec<EpochWithdrawDepositStakeData>>,
+    pub stake_epoch_map: HashMap<u64, Vec<EpochWithdrawDepositStakeData>>,
+    pub sol_epoch_map: HashMap<u64, EpochWithdrawDepositSOLData>,
 }
 
 impl RebalancingSimulator {
@@ -94,7 +101,14 @@ impl RebalancingSimulator {
         )
         .await?;
 
-        let withdraws_and_deposits_stakes = WithdrawsAndDeposits::get_details_for_epoch_range(
+        let withdraw_and_deposit_sol = WithdrawAndDepositSol::get_records_for_epoch_range(
+            db_connection,
+            simulation_start_epoch.into(),
+            simulation_end_epoch.into(),
+        )
+        .await?;
+
+        let withdraws_and_deposits_stakes = WithdrawsAndDepositStakes::get_records_for_epoch_range(
             db_connection,
             simulation_start_epoch.into(),
             simulation_end_epoch.into(),
@@ -109,7 +123,10 @@ impl RebalancingSimulator {
         .await?;
 
         let manual_withdraw_deposit_stake_epoch_map =
-            Self::build_epoch_map(withdraws_and_deposits_stakes, active_stake);
+            Self::build_stake_epoch_map(withdraws_and_deposits_stakes, &active_stake);
+        let manual_withdraw_deposit_sol_epoch_map =
+            Self::build_sol_epoch_map(withdraw_and_deposit_sol, &active_stake);
+
         let entries_by_validator = Self::build_entries_by_validator(all_entries);
 
         info!(
@@ -151,7 +168,8 @@ impl RebalancingSimulator {
             histories,
             jito_cluster_history,
             entries_by_validator: Arc::new(entries_by_validator),
-            epoch_map: manual_withdraw_deposit_stake_epoch_map,
+            stake_epoch_map: manual_withdraw_deposit_stake_epoch_map,
+            sol_epoch_map: manual_withdraw_deposit_sol_epoch_map,
         })
     }
 
@@ -201,7 +219,7 @@ impl RebalancingSimulator {
     }
 
     /// Transitions each validator's stake state. Activating stake becomes active, deactivating is
-    /// removed. 
+    /// removed.
     fn transition_validator_stake_stake(&mut self) {
         for stake_state in self.validator_stake_states.values_mut() {
             stake_state.process_epoch_transition();
@@ -286,6 +304,7 @@ impl RebalancingSimulator {
     ) -> Result<(), CliError> {
         // Factor in deposit/withdraws of the stakes
         self.apply_epoch_stake_changes(current_epoch)?;
+        self.apply_epoch_sol_changes(current_epoch)?;
 
         if !self.top_validators.is_empty() && !is_rebalancing_epoch {
             self.check_previous_cycle_stake();
@@ -408,9 +427,9 @@ impl RebalancingSimulator {
         target_total
     }
 
-    /// This function checks if there is still stake present in validators from the previous set 
+    /// This function checks if there is still stake present in validators from the previous set
     /// that must still be deactivated.
-    /// if yes, then we deactivate the previous amount by `self.scoring_unstake_cap_bps` and then 
+    /// if yes, then we deactivate the previous amount by `self.scoring_unstake_cap_bps` and then
     /// distribute it to the highest score validator that has not reached the `target`
     fn check_previous_cycle_stake(&mut self) {
         let new_validator_set: HashSet<String> = self
@@ -487,7 +506,7 @@ impl RebalancingSimulator {
                 }
                 total_deactivated += total_stake;
             } else if total_deactivated < max_deactivation_amount {
-                // Handle partial deactivation 
+                // Handle partial deactivation
                 let remaining_capacity = max_deactivation_amount - total_deactivated;
                 if let Some(stake_state) = self.validator_stake_states.get_mut(&vote_account) {
                     let mut amount_to_deactivate = remaining_capacity;
@@ -649,7 +668,7 @@ impl RebalancingSimulator {
     fn apply_epoch_stake_changes(&mut self, current_epoch: u16) -> Result<(), CliError> {
         let current_epoch_u64 = current_epoch as u64;
 
-        if let Some(epoch_data_vec) = self.epoch_map.get(&current_epoch_u64) {
+        if let Some(epoch_data_vec) = self.stake_epoch_map.get(&current_epoch_u64) {
             let num_records = epoch_data_vec.len();
             if num_records == 0 {
                 return Ok(());
@@ -702,7 +721,7 @@ impl RebalancingSimulator {
                     let stake_change_ratio = net_stake_change / epoch_data.active_balance;
                     let old_active = stake_state.active;
 
-                    stake_state.apply_stake_change(stake_change_ratio)?;
+                    stake_state.increase_activating_stake(stake_change_ratio)?;
                     let new_active = stake_state.active;
 
                     info!(
@@ -725,6 +744,61 @@ impl RebalancingSimulator {
             .map(|state| state.total())
             .sum::<u64>();
 
+        Ok(())
+    }
+
+    /// This function applies manual SOL withdraw and deposit changes equally across all top validators
+    /// It calculates the net SOL change (deposit - withdraw) for the epoch, divides it by active stake
+    /// to get a ratio, then applies that ratio divided equally among all top validators
+    fn apply_epoch_sol_changes(&mut self, current_epoch: u16) -> Result<(), CliError> {
+        let current_epoch_u64 = current_epoch as u64;
+        if let Some(epoch_sol_data) = self.sol_epoch_map.get(&current_epoch_u64) {
+            if epoch_sol_data.active_stake == 0.0 {
+                return Ok(());
+            }
+
+            let net_sol_change = epoch_sol_data.deposit_sol - epoch_sol_data.withdraw_sol;
+            let active_top_validators: Vec<String> = self
+                .top_validators
+                .iter()
+                .filter(|v| {
+                    self.validator_stake_states
+                        .get(&v.vote_account)
+                        .map(|state| state.target != 0)
+                        .unwrap_or(false)
+                })
+                .map(|v| v.vote_account.clone())
+                .collect();
+
+            if active_top_validators.is_empty() {
+                return Ok(());
+            }
+
+            let sol_amount_per_validator = net_sol_change / active_top_validators.len() as f64;
+            info!(
+                "Epoch {}: Applying SOL changes - Net change: {:.6} SOL, Per validator: {:.6} SOL",
+                current_epoch, net_sol_change, sol_amount_per_validator
+            );
+
+            for validator_account in &active_top_validators {
+                if let Some(stake_state) = self.validator_stake_states.get_mut(validator_account) {
+                    // Calculate ratio specific to this validator's active stake
+                    let validator_ratio = if stake_state.active > 0 {
+                        sol_amount_per_validator / (stake_state.active as f64)
+                    } else {
+                        0.0
+                    };
+
+                    stake_state.increase_activating_stake(validator_ratio)?;
+                }
+            }
+
+            self.total_lamports_staked = self
+                .validator_stake_states
+                .values()
+                .map(|state| state.total())
+                .sum::<u64>();
+        }
         Ok(())
     }
 
@@ -1008,9 +1082,9 @@ impl RebalancingSimulator {
     }
 
     /// This returns the hashap of manual withdraws and deposits of stakes epochwise
-    fn build_epoch_map(
-        withdraws_and_deposits: Vec<WithdrawsAndDeposits>,
-        active_stake: Vec<ActiveStakeJitoSol>,
+    fn build_stake_epoch_map(
+        withdraws_and_deposits: Vec<WithdrawsAndDepositStakes>,
+        active_stake: &Vec<ActiveStakeJitoSol>,
     ) -> HashMap<u64, Vec<EpochWithdrawDepositStakeData>> {
         let mut epoch_map: HashMap<u64, Vec<EpochWithdrawDepositStakeData>> = HashMap::new();
         let mut active_by_epoch: HashMap<u64, f64> = HashMap::new();
@@ -1028,6 +1102,34 @@ impl RebalancingSimulator {
                     withdraw_stake: wd.withdraw_stake.to_f64().unwrap_or(0.0),
                     deposit_stake: wd.deposit_stake.to_f64().unwrap_or(0.0),
                     active_balance,
+                },
+            );
+        }
+
+        epoch_map
+    }
+
+    /// This returns the hashmap of epoch to `WithdrawAndDepositSol` consisting of withdraw/deposit SOL and total `active_stake``
+    fn build_sol_epoch_map(
+        withdraw_and_deposit_sol: Vec<WithdrawAndDepositSol>,
+        active_stake: &Vec<ActiveStakeJitoSol>,
+    ) -> HashMap<u64, EpochWithdrawDepositSOLData> {
+        let mut active_by_epoch: HashMap<u64, f64> = HashMap::new();
+        for stake in active_stake {
+            let balance = stake.balance.to_f64().unwrap_or(0.0);
+            *active_by_epoch.entry(stake.epoch).or_insert(0.0) += balance;
+        }
+
+        let mut epoch_map: HashMap<u64, EpochWithdrawDepositSOLData> = HashMap::new();
+        for sol_data in withdraw_and_deposit_sol {
+            let active_balance = active_by_epoch.get(&sol_data.epoch).cloned().unwrap_or(0.0);
+
+            epoch_map.insert(
+                sol_data.epoch,
+                EpochWithdrawDepositSOLData {
+                    active_stake: active_balance,
+                    deposit_sol: sol_data.deposit_sol.to_f64().unwrap_or(0.0),
+                    withdraw_sol: sol_data.withdraw_sol.to_f64().unwrap_or(0.0),
                 },
             );
         }
