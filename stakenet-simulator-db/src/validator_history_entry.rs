@@ -175,12 +175,22 @@ impl ValidatorHistoryEntry {
                 record.validator_history_entry.vote_account_last_update_slot,
             ));
             separated.push_bind(BigDecimal::from(record.validator_history_entry.mev_earned));
-            separated.push_bind(
-                i32::try_from(record.validator_history_entry.priority_fee_commission).unwrap(),
-            );
-            separated.push_bind(BigDecimal::from(
-                record.validator_history_entry.priority_fee_tips,
-            ));
+
+            // This is done as these fields were not tracked by the validator history porgram before this epoch
+            let priority_fee_commission = if record.validator_history_entry.epoch <= 735 {
+                0
+            } else {
+                i32::try_from(record.validator_history_entry.priority_fee_commission).unwrap()
+            };
+            separated.push_bind(priority_fee_commission);
+
+            let priority_fee_tips = if record.validator_history_entry.epoch <= 735 {
+                BigDecimal::from(0)
+            } else {
+                BigDecimal::from(record.validator_history_entry.priority_fee_tips)
+            };
+            separated.push_bind(priority_fee_tips);
+
             separated.push_bind(BigDecimal::from(
                 record.validator_history_entry.total_priority_fees,
             ));
