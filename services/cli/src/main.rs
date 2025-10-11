@@ -69,7 +69,20 @@ async fn main() -> Result<(), CliError> {
             let rpc_url = cli.rpc_url.as_ref().ok_or(CliError::InvalidRPCUrl)?;
             let rpc_client = RpcClient::new(rpc_url.to_string());
 
-            handle_backtest(args, &db_conn_pool, &rpc_client).await
+            // TODO: Should we pull the current epoch from RPC or make it be a CLI argument?
+            let current_epoch: u16 = 700;
+            // TODO: Determine how this should be passed. The number of epochs to look back
+            let look_back_period = 100;
+
+            handle_backtest(
+                args,
+                &db_conn_pool,
+                &rpc_client,
+                current_epoch,
+                look_back_period,
+            )
+            .await?;
+            Ok(())
         }
     }
 }

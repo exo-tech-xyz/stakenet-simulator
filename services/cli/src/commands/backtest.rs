@@ -97,15 +97,45 @@ impl BacktestArgs {
     }
 }
 
+impl Default for BacktestArgs {
+    fn default() -> Self {
+        BacktestArgs {
+            mev_commission_range: None,
+            epoch_credits_range: None,
+            commission_range: None,
+            scoring_delinquency_threshold_ratio: None,
+            instant_unstake_delinquency_threshold_ratio: None,
+            mev_commission_bps_threshold: None,
+            commission_threshold: None,
+            historical_commission_threshold: None,
+            priority_fee_lookback_epochs: None,
+            priority_fee_lookback_offset: None,
+            priority_fee_max_commission_bps: None,
+            priority_fee_error_margin_bps: None,
+            num_delegation_validators: None,
+            scoring_unstake_cap_bps: None,
+            instant_unstake_cap_bps: None,
+            stake_deposit_unstake_cap_bps: None,
+            instant_unstake_epoch_progress: None,
+            compute_score_slot_range: None,
+            instant_unstake_inputs_epoch_progress: None,
+            num_epochs_between_scoring: None,
+            minimum_stake_lamports: None,
+            minimum_voting_epochs: None,
+            priority_fee_scoring_start_epoch: None,
+            target_epoch: None,
+            steward_cycle_rate: 10,
+        }
+    }
+}
+
 pub async fn handle_backtest(
     args: BacktestArgs,
     db_connection: &Pool<Postgres>,
     rpc_client: &RpcClient,
-) -> Result<(), CliError> {
-    // TODO: Should we pull the current epoch from RPC or make it be a CLI argument?
-    let current_epoch: u16 = 840;
-    // TODO: Determine how this should be passed. The number of epochs to look back
-    let look_back_period = 50;
+    current_epoch: u16,
+    look_back_period: u16,
+) -> Result<f64, CliError> {
     // TODO: Determine if this should be an argument
     let number_of_validator_delegations = 200;
 
@@ -146,7 +176,7 @@ pub async fn handle_backtest(
     info!("Stake utilization ratio: {:.4}", stake_utilization_ratio);
     info!("Final adjusted APY: {:.4}%", final_apy * 100.0);
 
-    Ok(())
+    Ok(final_apy)
 }
 
 pub async fn rebalancing_simulation(

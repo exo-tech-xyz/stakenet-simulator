@@ -11,6 +11,8 @@ of the steward protocol with the new parameters provided in the CLI.
 - [Epoch Rewards Tracker](https://github.com/exo-tech-xyz/stakenet-simulator?tab=readme-ov-file#epoch-rewards-tracker)
 - [Setup Database](https://github.com/exo-tech-xyz/stakenet-simulator?tab=readme-ov-file#setup-database)
 
+Read CONSIDERATIONS.md for more detailed overview of the program.
+
 ## stakenet-cli
 Runs a backtesting simulation with configurable steward parameters.
 

@@ -3,7 +3,8 @@ resolver = "3"
 members = [ 
   "services/epoch-rewards-tracker",
   "services/cli",
-  "stakenet-simulator-db"
+  "stakenet-simulator-db",
+  "benchmark"
 ]
 
 [patch.crates-io.curve25519-dalek]
@@ -28,3 +29,7 @@ tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 validator-history = { package = "validator-history", features = ["no-entrypoint"], git = "https://github.com/jito-foundation/stakenet", branch = "master" }
 jito-steward = { package = "jito-steward", features = ["no-entrypoint"], git = "https://github.com/jito-foundation/stakenet", branch = "master" }
+reqwest = { version = "0.12", features = ["json"] }
+steward-simulator-cli = { path = "./services/cli" }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
