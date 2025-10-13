@@ -51,7 +51,7 @@ impl FromRow<'_, PgRow> for ValidatorHistoryEntry {
 
         let ip_converted: [u8; 4] = ip
             .split(".")
-            .map(|x| u8::from_str_radix(x, 10).unwrap())
+            .map(|x| x.parse::<u8>().unwrap())
             .collect::<Vec<u8>>()
             .try_into()
             .unwrap();
@@ -127,7 +127,7 @@ impl ValidatorHistoryEntry {
         db_connection: &Pool<Postgres>,
         records: Vec<Self>,
     ) -> Result<(), Error> {
-        if records.len() <= 0 {
+        if records.is_empty() {
             return Ok(());
         }
 
@@ -149,9 +149,9 @@ impl ValidatorHistoryEntry {
             ));
             separated.push_bind(i32::from(record.validator_history_entry.epoch));
             separated
-                .push_bind(i32::try_from(record.validator_history_entry.mev_commission).unwrap());
+                .push_bind(i32::from(record.validator_history_entry.mev_commission));
             separated
-                .push_bind(i64::try_from(record.validator_history_entry.epoch_credits).unwrap());
+                .push_bind(i64::from(record.validator_history_entry.epoch_credits));
             separated.push_bind(i32::from(record.validator_history_entry.commission));
             separated.push_bind(i16::from(record.validator_history_entry.client_type));
             let version: ClientVersion = record.validator_history_entry.version.into();
@@ -170,7 +170,7 @@ impl ValidatorHistoryEntry {
                 record.validator_history_entry.merkle_root_upload_authority as u8,
             ));
             separated.push_bind(i16::from(record.validator_history_entry.is_superminority));
-            separated.push_bind(i64::try_from(record.validator_history_entry.rank).unwrap());
+            separated.push_bind(i64::from(record.validator_history_entry.rank));
             separated.push_bind(BigDecimal::from(
                 record.validator_history_entry.vote_account_last_update_slot,
             ));
@@ -180,7 +180,7 @@ impl ValidatorHistoryEntry {
             let priority_fee_commission = if record.validator_history_entry.epoch <= 735 {
                 0
             } else {
-                i32::try_from(record.validator_history_entry.priority_fee_commission).unwrap()
+                i32::from(record.validator_history_entry.priority_fee_commission)
             };
             separated.push_bind(priority_fee_commission);
 
@@ -195,10 +195,10 @@ impl ValidatorHistoryEntry {
                 record.validator_history_entry.total_priority_fees,
             ));
             separated.push_bind(
-                i64::try_from(record.validator_history_entry.total_leader_slots).unwrap(),
+                i64::from(record.validator_history_entry.total_leader_slots),
             );
             separated
-                .push_bind(i64::try_from(record.validator_history_entry.blocks_produced).unwrap());
+                .push_bind(i64::from(record.validator_history_entry.blocks_produced));
             separated.push_bind(BigDecimal::from(
                 record.validator_history_entry.block_data_updated_at_slot,
             ));
@@ -239,9 +239,7 @@ impl ValidatorHistoryEntry {
         db_connection: &Pool<Postgres>,
         vote_pubkey: &str,
     ) -> Result<Vec<Self>, Error> {
-        sqlx::query_as::<_, Self>(&format!(
-            "SELECT * FROM validator_history_entries WHERE vote_pubkey = $1",
-        ))
+        sqlx::query_as::<_, Self>("SELECT * FROM validator_history_entries WHERE vote_pubkey = $1")
         .bind(vote_pubkey)
         .fetch_all(db_connection)
         .await
@@ -253,9 +251,7 @@ impl ValidatorHistoryEntry {
         epoch: u64,
     ) -> Result<Option<Self>, Error> {
         let id = format!("{}-{}", epoch, vote_pubkey);
-        sqlx::query_as::<_, Self>(&format!(
-            "SELECT * FROM validator_history_entries WHERE id = $1",
-        ))
+        sqlx::query_as::<_, Self>("SELECT * FROM validator_history_entries WHERE id = $1")
         .bind(id)
         .fetch_optional(db_connection)
         .await
@@ -266,9 +262,7 @@ impl ValidatorHistoryEntry {
         start_epoch: u64,
         end_epoch: u64,
     ) -> Result<Vec<Self>, Error> {
-        sqlx::query_as::<_, Self>(&format!(
-            "SELECT * FROM validator_history_entries WHERE epoch >= $1 AND epoch <= $2",
-        ))
+        sqlx::query_as::<_, Self>("SELECT * FROM validator_history_entries WHERE epoch >= $1 AND epoch <= $2")
         .bind(start_epoch as i32)
         .bind(end_epoch as i32)
         .fetch_all(db_connection)
@@ -278,9 +272,7 @@ impl ValidatorHistoryEntry {
     pub async fn get_all_vote_pubkeys(
         db_connection: &Pool<Postgres>,
     ) -> Result<Vec<String>, Error> {
-        let pubkeys = sqlx::query_as::<_, VotePubkey>(&format!(
-            "SELECT DISTINCT ON(vote_pubkey) vote_pubkey FROM validator_history_entries GROUP BY vote_pubkey",
-        ))
+        let pubkeys = sqlx::query_as::<_, VotePubkey>("SELECT DISTINCT ON(vote_pubkey) vote_pubkey FROM validator_history_entries GROUP BY vote_pubkey")
         .fetch_all(db_connection)
         .await?;
 
@@ -290,7 +282,7 @@ impl ValidatorHistoryEntry {
     pub async fn fetch_all_validator_history_entries(
         db_connection: &Pool<Postgres>,
     ) -> Result<Vec<Self>, Error> {
-        sqlx::query_as::<_, Self>(&format!("SELECT * FROM validator_history_entries",))
+        sqlx::query_as::<_, Self>("SELECT * FROM validator_history_entries")
             .fetch_all(db_connection)
             .await
     }

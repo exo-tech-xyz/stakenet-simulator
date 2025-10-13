@@ -112,7 +112,7 @@ pub async fn get_block(
         )
         .await;
     match block_res {
-        Ok(block) => return Ok(block),
+        Ok(block) => Ok(block),
         Err(err) => match err.kind {
             ClientErrorKind::RpcError(client_rpc_err) => match client_rpc_err {
                 RpcError::RpcResponseError {
@@ -142,17 +142,17 @@ pub async fn get_block(
                             }
                         }
                     }
-                    return Err(RpcUtilsError::RpcError(RpcError::RpcResponseError {
+                    Err(RpcUtilsError::RpcError(RpcError::RpcResponseError {
                         code,
                         message,
                         data,
-                    }));
+                    }))
                 }
-                _ => return Err(RpcUtilsError::RpcError(client_rpc_err)),
+                _ => Err(RpcUtilsError::RpcError(client_rpc_err)),
             },
-            _ => return Err(RpcUtilsError::SolanaClientError(err)),
+            _ => Err(RpcUtilsError::SolanaClientError(err)),
         },
-    };
+    }
 }
 
 pub async fn fetch_slot_history(
@@ -163,6 +163,6 @@ pub async fn fetch_slot_history(
         .await
         .map_err(|e| RpcUtilsError::Custom(format!("Failed to fetch SlotHistory: {}", e)))?;
     let slot_history = from_account::<slot_history::SlotHistory, _>(&account_data)
-        .ok_or_else(|| RpcUtilsError::Custom(format!("Failed to deserialize SlotHistory")))?;
+        .ok_or_else(|| RpcUtilsError::Custom("Failed to deserialize SlotHistory".to_string()))?;
     Ok(slot_history)
 }

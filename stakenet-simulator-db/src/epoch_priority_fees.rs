@@ -21,8 +21,8 @@ impl EpochPriorityFees {
         Self {
             id: format!("{}-{}", epoch, identity),
             identity_pubkey: identity,
-            epoch: epoch,
-            priority_fees: priority_fees,
+            epoch,
+            priority_fees,
         }
     }
 
@@ -30,7 +30,7 @@ impl EpochPriorityFees {
         db_connection: &Pool<Postgres>,
         records: Vec<Self>,
     ) -> Result<u64, Error> {
-        if records.len() <= 0 {
+        if records.is_empty() {
             return Ok(0);
         }
 
@@ -78,9 +78,9 @@ impl EpochPriorityFees {
         db_connection: &Pool<Postgres>,
         epoch: u64,
     ) -> Result<Vec<String>, Error> {
-        let pubkeys = sqlx::query_as::<_, IdentityPubkey>(&format!(
+        let pubkeys = sqlx::query_as::<_, IdentityPubkey>(
             "SELECT identity_pubkey FROM epoch_priority_fees WHERE epoch = $1",
-        ))
+        )
         .bind(BigDecimal::from(epoch))
         .fetch_all(db_connection)
         .await?;

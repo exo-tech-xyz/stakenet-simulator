@@ -228,7 +228,7 @@ impl RebalancingSimulator {
 
     /// checks if the current epoch is the start fo a new steward cycle
     fn is_rebalancing_epoch(&self, current_epoch: u16) -> bool {
-        (current_epoch - self.simulation_start_epoch) % self.steward_cycle_rate == 0
+        (current_epoch - self.simulation_start_epoch).is_multiple_of(self.steward_cycle_rate)
     }
 
     /// From all the validator entries, filter only the entires that are before the current epoch
@@ -362,7 +362,7 @@ impl RebalancingSimulator {
                 let validator_history = validator_history.clone();
                 let entries_by_validator = Arc::clone(current_epoch_entries);
                 let jito_cluster_history = Arc::clone(&self.jito_cluster_history);
-                let steward_config = self.steward_config.clone();
+                let steward_config = self.steward_config;
 
                 tokio::task::spawn_blocking(move || {
                     Self::score_validator(
@@ -378,7 +378,7 @@ impl RebalancingSimulator {
 
         let scoring_results = try_join_all(scoring_tasks)
             .await
-            .map_err(|e| CliError::TaskJoinError(e))?;
+            .map_err(CliError::TaskJoinError)?;
 
         let mut scored_validators: Vec<(String, f64)> = scoring_results
             .into_iter()
@@ -620,11 +620,7 @@ impl RebalancingSimulator {
             let current_total = current_state.total();
             let desired_target = current_state.target;
 
-            let needed_stake = if desired_target > current_total {
-                desired_target - current_total
-            } else {
-                0
-            };
+            let needed_stake = desired_target.saturating_sub(current_total);
 
             let allocation = std::cmp::min(needed_stake, remaining_stake);
             if allocation > 0 {
@@ -848,7 +844,7 @@ impl RebalancingSimulator {
                         let validator_history = validator_history.clone();
                         let entries_by_validator = Arc::clone(entries_by_validator);
                         let jito_cluster_history = Arc::clone(&self.jito_cluster_history);
-                        let steward_config = self.steward_config.clone();
+                        let steward_config = self.steward_config;
                         let vote_account = validator_vote_account.clone();
 
                         tokio::task::spawn_blocking(move || {
@@ -868,7 +864,7 @@ impl RebalancingSimulator {
 
         let unstake_results = try_join_all(unstake_tasks)
             .await
-            .map_err(|e| CliError::TaskJoinError(e))?;
+            .map_err(CliError::TaskJoinError)?;
 
         let mut validators_to_unstake = Vec::new();
         for (vote_account, result) in unstake_results {
@@ -1019,13 +1015,12 @@ impl RebalancingSimulator {
         .await?;
 
         for reward in rewards {
-            if let Some(stake_state) = self.validator_stake_states.get_mut(&reward.vote_pubkey) {
-                if stake_state.active > 0 {
+            if let Some(stake_state) = self.validator_stake_states.get_mut(&reward.vote_pubkey)
+                && stake_state.active > 0 {
                     let reward_amount =
                         reward.stake_after_epoch(stake_state.active) - stake_state.active;
                     stake_state.apply_rewards(reward_amount);
                 }
-            }
         }
 
         let total_after_rewards = self
@@ -1075,7 +1070,7 @@ impl RebalancingSimulator {
         for entry in all_entries {
             entries_by_validator
                 .entry(entry.vote_pubkey.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(entry);
         }
         entries_by_validator
@@ -1097,7 +1092,7 @@ impl RebalancingSimulator {
         for wd in withdraws_and_deposits {
             let active_balance = active_by_epoch.get(&wd.epoch).cloned().unwrap_or(0.0);
 
-            epoch_map.entry(wd.epoch).or_insert_with(Vec::new).push(
+            epoch_map.entry(wd.epoch).or_default().push(
                 EpochWithdrawDepositStakeData {
                     withdraw_stake: wd.withdraw_stake.to_f64().unwrap_or(0.0),
                     deposit_stake: wd.deposit_stake.to_f64().unwrap_or(0.0),

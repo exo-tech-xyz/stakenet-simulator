@@ -26,13 +26,13 @@ impl From<JitoClusterHistoryEntry> for ClusterHistoryEntry {
     }
 }
 
-impl Into<JitoClusterHistoryEntry> for ClusterHistoryEntry {
-    fn into(self) -> JitoClusterHistoryEntry {
+impl From<ClusterHistoryEntry> for JitoClusterHistoryEntry {
+    fn from(val: ClusterHistoryEntry) -> Self {
         JitoClusterHistoryEntry {
-            total_blocks: self.total_blocks,
-            epoch: self.epoch,
+            total_blocks: val.total_blocks,
+            epoch: val.epoch,
             padding0: [0u8; 2],
-            epoch_start_timestamp: self.epoch_start_timestamp,
+            epoch_start_timestamp: val.epoch_start_timestamp,
             padding: [0u8; 240],
         }
     }
@@ -49,7 +49,7 @@ impl ClusterHistoryEntry {
         db_connection: &Pool<Postgres>,
         records: Vec<Self>,
     ) -> Result<(), SqlxError> {
-        if records.len() <= 0 {
+        if records.is_empty() {
             return Ok(());
         }
 

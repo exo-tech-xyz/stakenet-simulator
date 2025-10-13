@@ -46,7 +46,7 @@ impl ValidatorHistory {
         db_connection: &Pool<Postgres>,
         records: Vec<Self>,
     ) -> Result<(), SqlxError> {
-        if records.len() <= 0 {
+        if records.is_empty() {
             return Ok(());
         }
 
@@ -88,7 +88,7 @@ impl ValidatorHistory {
     }
 
     pub async fn fetch_all(db_connection: &Pool<Postgres>) -> Result<Vec<Self>, SqlxError> {
-        sqlx::query_as::<_, Self>(&format!("SELECT * FROM validator_histories",))
+        sqlx::query_as::<_, Self>("SELECT * FROM validator_histories")
             .fetch_all(db_connection)
             .await
     }
@@ -96,7 +96,7 @@ impl ValidatorHistory {
     /// Uses our db table data to convert to a JitoValidatorHistory struct
     pub fn convert_to_jito_validator_history(
         self,
-        entries: &mut Vec<ValidatorHistoryEntry>,
+        entries: &mut [ValidatorHistoryEntry],
     ) -> JitoValidatorHistory {
         let mut validator_history = JitoValidatorHistory {
             struct_version: self.struct_version,
@@ -117,7 +117,7 @@ impl ValidatorHistory {
                 .cmp(&b.validator_history_entry.epoch)
         });
         // Loop through sorted entries insert into ValidatorHistory
-        for entry in entries.into_iter() {
+        for entry in entries.iter_mut() {
             if let Some(last_entry) = validator_history.history.last_mut() {
                 match last_entry.epoch.cmp(&entry.validator_history_entry.epoch) {
                     Ordering::Equal => {
