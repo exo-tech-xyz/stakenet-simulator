@@ -140,7 +140,7 @@ pub async fn handle_backtest(
     let number_of_validator_delegations = 200;
 
     // Load existing steward config and overwrite parameters based on CLI args
-    let mut steward_config = fetch_config(&rpc_client).await?;
+    let mut steward_config = fetch_config(rpc_client).await?;
     args.update_steward_config(&mut steward_config);
 
     let simulation_start_epoch = current_epoch.saturating_sub(look_back_period);
@@ -192,7 +192,7 @@ pub async fn rebalancing_simulation(
 ) -> Result<Vec<RebalancingCycle>, CliError> {
     let mut simulator = RebalancingSimulator::new(
         db_connection,
-        steward_config.clone(),
+        *steward_config,
         simulation_start_epoch,
         simulation_end_epoch,
         steward_cycle_rate,

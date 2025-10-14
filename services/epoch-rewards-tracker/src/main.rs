@@ -23,7 +23,6 @@ mod inflation;
 mod priority_fees;
 mod rpc_utils;
 mod stake_accounts;
-mod steward_utils;
 mod validator_history_utils;
 mod withdraw_and_deposit_sol;
 mod withdraw_and_deposits;
@@ -91,7 +90,6 @@ async fn main() -> Result<(), EpochRewardsTrackerError> {
         rpc_url: cli.globals.rpc_url,
         validator_history_program_id: cli.globals.validator_history_program_id,
         db_connection_url: cli.globals.db_connection_url,
-        epoch_check_cycle_sec: cli.globals.epoch_check_cycle_sec,
     };
 
     let db_conn_pool = Arc::new(

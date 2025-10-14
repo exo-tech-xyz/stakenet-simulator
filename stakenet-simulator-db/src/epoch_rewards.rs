@@ -44,7 +44,7 @@ impl EpochRewards {
         db_connection: &Pool<Postgres>,
         records: Vec<Self>,
     ) -> Result<(), Error> {
-        if records.len() <= 0 {
+        if records.is_empty() {
             return Ok(());
         }
 
@@ -93,9 +93,9 @@ impl EpochRewards {
         start_epoch: u64,
         end_epoch: u64,
     ) -> Result<Vec<Self>, Error> {
-        sqlx::query_as::<_, Self>(&format!(
+        sqlx::query_as::<_, Self>(
             "SELECT * FROM epoch_rewards WHERE vote_pubkey = ANY($1) AND epoch BETWEEN $2 AND $3",
-        ))
+        )
         .bind(vote_accounts)
         .bind(BigDecimal::from(start_epoch))
         .bind(BigDecimal::from(end_epoch))
@@ -108,9 +108,7 @@ impl EpochRewards {
         vote_accounts: &Vec<String>,
         epoch: u64,
     ) -> Result<Vec<Self>, Error> {
-        sqlx::query_as::<_, Self>(&format!(
-            "SELECT * FROM epoch_rewards WHERE vote_pubkey = ANY($1) AND epoch = $2",
-        ))
+        sqlx::query_as::<_, Self>("SELECT * FROM epoch_rewards WHERE vote_pubkey = ANY($1) AND epoch = $2")
         .bind(vote_accounts)
         .bind(BigDecimal::from(epoch))
         .fetch_all(db_connection)

@@ -23,7 +23,7 @@ pub async fn load_and_record_validator_history(
     let last_finalized_epoch = current_epoch_info.epoch as u16;
 
     let validator_history_pubkeys =
-        load_all_validator_history_pubkeys(&rpc_client, program_id).await?;
+        load_all_validator_history_pubkeys(rpc_client, program_id).await?;
     info!("Validator history pubkeys: {:?}", validator_history_pubkeys);
 
     // Load validator history from jito program
@@ -74,7 +74,7 @@ pub async fn load_all_validator_history_pubkeys(
 ) -> Result<Vec<Pubkey>, EpochRewardsTrackerError> {
     let discriminator_filter = RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
         0,
-        &JitoValidatorHistory::DISCRIMINATOR,
+        JitoValidatorHistory::DISCRIMINATOR,
     ));
     let config = RpcProgramAccountsConfig {
         filters: Some(vec![discriminator_filter]),

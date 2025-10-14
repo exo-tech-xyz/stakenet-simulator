@@ -26,7 +26,7 @@ pub async fn fetch_active_stake(db: &Pool<Postgres>) -> Result<(), EpochRewardsT
     for row in results {
         epoch_balances
             .entry(row.approx_epoch)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(row.total_sol_balance);
     }
 

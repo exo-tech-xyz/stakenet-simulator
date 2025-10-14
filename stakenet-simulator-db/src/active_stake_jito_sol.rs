@@ -22,7 +22,7 @@ impl ActiveStakeJitoSol {
         db_connection: &Pool<Postgres>,
         records: Vec<Self>,
     ) -> Result<(), Error> {
-        if records.len() <= 0 {
+        if records.is_empty() {
             return Ok(());
         }
 

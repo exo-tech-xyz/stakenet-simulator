@@ -1,6 +1,8 @@
 use solana_sdk::{pubkey::Pubkey, stake::state::StakeStateV2};
 use sqlx::{Error as SqlxError, FromRow, Pool, Postgres, QueryBuilder, types::BigDecimal};
 
+use crate::stake_accounts;
+
 #[derive(Default)]
 pub struct StakeAccount {
     pubkey: String,
@@ -25,8 +27,10 @@ pub struct StakeAccount {
 
 impl From<(Pubkey, StakeStateV2)> for StakeAccount {
     fn from(value: (Pubkey, StakeStateV2)) -> Self {
-        let mut res = Self::default();
-        res.pubkey = value.0.to_string();
+        let mut res = stake_accounts::StakeAccount {
+            pubkey: value.0.to_string(),
+            ..Self::default()
+        };
         match value.1 {
             StakeStateV2::Uninitialized => {
                 res.discriminator = 0;
@@ -70,7 +74,7 @@ impl StakeAccount {
         db_connection: &Pool<Postgres>,
         records: Vec<Self>,
     ) -> Result<(), SqlxError> {
-        if records.len() <= 0 {
+        if records.is_empty() {
             return Ok(());
         }
 
@@ -87,26 +91,18 @@ impl StakeAccount {
             let mut separated = query_builder.separated(", ");
             separated.push_bind(record.pubkey);
             separated.push_bind(i32::try_from(record.discriminator).unwrap());
-            separated.push_bind(record.rent_exempt_reserve.map(|x| BigDecimal::from(x)));
+            separated.push_bind(record.rent_exempt_reserve.map(BigDecimal::from));
             separated.push_bind(record.authorized_staker);
             separated.push_bind(record.authorized_withdrawer);
             separated.push_bind(record.lockup_unix_timestamp);
-            separated.push_bind(record.lockup_epoch.map(|x| BigDecimal::from(x)));
+            separated.push_bind(record.lockup_epoch.map(BigDecimal::from));
             separated.push_bind(record.lockup_custodian);
             separated.push_bind(record.delegation_voter_pubkey);
-            separated.push_bind(record.delegation_stake.map(|x| BigDecimal::from(x)));
-            separated.push_bind(
-                record
-                    .delegation_activation_epoch
-                    .map(|x| BigDecimal::from(x)),
-            );
-            separated.push_bind(
-                record
-                    .delegation_deactivation_epoch
-                    .map(|x| BigDecimal::from(x)),
-            );
+            separated.push_bind(record.delegation_stake.map(BigDecimal::from));
+            separated.push_bind(record.delegation_activation_epoch.map(BigDecimal::from));
+            separated.push_bind(record.delegation_deactivation_epoch.map(BigDecimal::from));
             separated.push_bind(record.delegation_warmup_cooldown_rate);
-            separated.push_bind(record.credits_observed.map(|x| BigDecimal::from(x)));
+            separated.push_bind(record.credits_observed.map(BigDecimal::from));
 
             separated.push_unseparated(") ");
 
@@ -128,11 +124,10 @@ impl StakeAccount {
     }
 
     pub async fn get_all_pubkeys(db_connection: &Pool<Postgres>) -> Result<Vec<String>, SqlxError> {
-        let pubkeys = sqlx::query_as::<_, RecordPubkey>(&format!(
-            "SELECT pubkey FROM stake_accounts ORDER BY pubkey",
-        ))
-        .fetch_all(db_connection)
-        .await?;
+        let pubkeys =
+            sqlx::query_as::<_, RecordPubkey>("SELECT pubkey FROM stake_accounts ORDER BY pubkey")
+                .fetch_all(db_connection)
+                .await?;
 
         Ok(pubkeys.into_iter().map(|row| row.pubkey).collect())
     }

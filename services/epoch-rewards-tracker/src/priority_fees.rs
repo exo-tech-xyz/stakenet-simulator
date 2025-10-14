@@ -50,7 +50,7 @@ pub async fn gather_priority_fee_data_for_epoch(
                     let slot_history = slot_history.clone(); // Clone if needed
 
                     async move {
-                        let result = get_block(&rpc_client, absolute_slot, &slot_history).await;
+                        let result = get_block(rpc_client, absolute_slot, &slot_history).await;
                         (absolute_slot, result)
                     }
                 })
@@ -81,7 +81,7 @@ pub async fn gather_priority_fee_data_for_epoch(
             })
             .sum::<u64>();
         EpochPriorityFees::bulk_insert(
-            &db_connection,
+            db_connection,
             vec![EpochPriorityFees::new(identity, epoch, total_fees)],
         )
         .await?;

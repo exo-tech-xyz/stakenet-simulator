@@ -39,7 +39,7 @@ impl InflationReward {
             effective_slot: rpc_inflation_reward.effective_slot,
             amount: rpc_inflation_reward.amount,
             post_balance: rpc_inflation_reward.post_balance,
-            commission: rpc_inflation_reward.commission.map(|x| i16::from(x)),
+            commission: rpc_inflation_reward.commission.map(i16::from),
         }
     }
 
@@ -47,7 +47,7 @@ impl InflationReward {
         db_connection: &Pool<Postgres>,
         records: Vec<Self>,
     ) -> Result<(), SqlxError> {
-        if records.len() <= 0 {
+        if records.is_empty() {
             return Ok(());
         }
 
@@ -68,7 +68,7 @@ impl InflationReward {
             separated.push_bind(BigDecimal::from(record.effective_slot));
             separated.push_bind(BigDecimal::from(record.amount));
             separated.push_bind(BigDecimal::from(record.post_balance));
-            separated.push_bind(record.commission.map(|x| i16::from(x)));
+            separated.push_bind(record.commission);
 
             separated.push_unseparated(") ");
 
@@ -93,9 +93,7 @@ impl InflationReward {
         db_connection: &Pool<Postgres>,
         vote_pubkey: &str,
     ) -> Result<Vec<Self>, SqlxError> {
-        sqlx::query_as::<_, Self>(&format!(
-        "SELECT inflation_rewards.* FROM inflation_rewards INNER JOIN stake_accounts ON stake_accounts.pubkey = inflation_rewards.stake_account WHERE stake_accounts.delegation_voter_pubkey = $1",
-    ))
+        sqlx::query_as::<_, Self>("SELECT inflation_rewards.* FROM inflation_rewards INNER JOIN stake_accounts ON stake_accounts.pubkey = inflation_rewards.stake_account WHERE stake_accounts.delegation_voter_pubkey = $1")
     .bind(vote_pubkey)
     .fetch_all(db_connection)
     .await
